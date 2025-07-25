@@ -1,26 +1,98 @@
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Index from "./pages/Index";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import { Layout } from "./components/Layout";
+
+// Pages
+import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
+import Medicos from "./pages/Medicos";
+import Procedimentos from "./pages/Procedimentos";
+import Pagamentos from "./pages/Pagamentos";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-light to-secondary-light">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-primary">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <Layout>{children}</Layout>;
+};
+
+const AppRoutes = () => {
+  const { user } = useAuth();
+
+  return (
+    <Routes>
+      <Route path="/login" element={!user ? <Login /> : <Navigate to="/dashboard" replace />} />
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route 
+        path="/dashboard" 
+        element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/medicos" 
+        element={
+          <ProtectedRoute>
+            {user?.role === 'admin' ? <Medicos /> : <Navigate to="/dashboard" replace />}
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/procedimentos" 
+        element={
+          <ProtectedRoute>
+            <Procedimentos />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/pagamentos" 
+        element={
+          <ProtectedRoute>
+            {user?.role === 'admin' ? <Pagamentos /> : <Navigate to="/dashboard" replace />}
+          </ProtectedRoute>
+        } 
+      />
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  );
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
+    <AuthProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </TooltipProvider>
+    </AuthProvider>
   </QueryClientProvider>
 );
 
