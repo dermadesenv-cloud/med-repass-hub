@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff, Activity } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -54,8 +54,12 @@ const Login = () => {
       
       <Card className="w-full max-w-md mx-4 shadow-2xl border-0 bg-white backdrop-blur-sm animate-fade-in">
         <CardHeader className="text-center pb-6">
-          <div className="mx-auto w-20 h-20 bg-gradient-to-r from-primary to-secondary rounded-full flex items-center justify-center mb-6 shadow-lg">
-            <Activity className="w-10 h-10 text-white" />
+          <div className="mx-auto mb-6">
+            <img 
+              src="/lovable-uploads/1f27fba1-1c30-44f2-8802-66b0a90188e8.png" 
+              alt="MedPay Logo" 
+              className="h-16 w-auto mx-auto mb-4"
+            />
           </div>
           <CardTitle className="text-3xl font-bold text-gray-800">MedControl</CardTitle>
           <CardDescription className="text-gray-600 text-base">
@@ -73,7 +77,7 @@ const Login = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="h-12 border-gray-300 focus:border-primary focus:ring-primary/20"
+                className="h-12 border-gray-300 focus:border-blue-500 focus:ring-blue-500/20"
               />
             </div>
             <div className="space-y-2">
@@ -86,12 +90,12 @@ const Login = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="h-12 border-gray-300 focus:border-primary focus:ring-primary/20 pr-12"
+                  className="h-12 border-gray-300 focus:border-blue-500 focus:ring-blue-500/20 pr-12"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-primary"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-blue-500"
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
@@ -99,7 +103,7 @@ const Login = () => {
             </div>
             <Button
               type="submit"
-              className="w-full h-12 bg-gradient-to-r from-primary to-secondary hover:from-primary-dark hover:to-secondary-dark text-white font-medium shadow-lg text-base"
+              className="w-full h-12 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-medium shadow-lg text-base"
               disabled={isLoading}
             >
               {isLoading ? "Entrando..." : "Entrar"}
