@@ -49,23 +49,23 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-light via-white to-secondary-light">
-      <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGRlZnM+CjxwYXR0ZXJuIGlkPSJncmlkIiB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHBhdHRlcm5Vbml0cz0idXNlclNwYWNlT25Vc2UiPgo8cGF0aCBkPSJNIDYwIDAgTCAwIDAgMCA2MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJyZ2JhKDI1NSwgMjU1LCAyNTUsIDAuMSkiIHN0cm9rZS13aWR0aD0iMSIvPgo8L3BhdHRlcm4+CjwvZGVmcz4KPHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIgLz4KPHN2Zz4=')] opacity-20"></div>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-100 via-white to-purple-100">
+      <div className="absolute inset-0 bg-grid-pattern opacity-10"></div>
       
-      <Card className="w-full max-w-md mx-4 shadow-2xl border-0 bg-white/90 backdrop-blur-sm animate-fade-in">
-        <CardHeader className="text-center pb-2">
-          <div className="mx-auto w-16 h-16 bg-gradient-to-r from-primary to-secondary rounded-full flex items-center justify-center mb-4 shadow-lg">
-            <Activity className="w-8 h-8 text-white" />
+      <Card className="w-full max-w-md mx-4 shadow-2xl border-0 bg-white backdrop-blur-sm animate-fade-in">
+        <CardHeader className="text-center pb-6">
+          <div className="mx-auto w-20 h-20 bg-gradient-to-r from-primary to-secondary rounded-full flex items-center justify-center mb-6 shadow-lg">
+            <Activity className="w-10 h-10 text-white" />
           </div>
-          <CardTitle className="text-2xl font-bold text-primary">MedControl</CardTitle>
-          <CardDescription className="text-secondary">
+          <CardTitle className="text-3xl font-bold text-gray-800">MedControl</CardTitle>
+          <CardDescription className="text-gray-600 text-base">
             Sistema de Controle de Repasse Médico
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-primary font-medium">Email</Label>
+              <Label htmlFor="email" className="text-gray-700 font-medium">Email</Label>
               <Input
                 id="email"
                 type="email"
@@ -73,11 +73,11 @@ const Login = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="border-primary/20 focus:border-primary focus:ring-primary/20"
+                className="h-12 border-gray-300 focus:border-primary focus:ring-primary/20"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-primary font-medium">Senha</Label>
+              <Label htmlFor="password" className="text-gray-700 font-medium">Senha</Label>
               <div className="relative">
                 <Input
                   id="password"
@@ -86,31 +86,31 @@ const Login = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="border-primary/20 focus:border-primary focus:ring-primary/20 pr-10"
+                  className="h-12 border-gray-300 focus:border-primary focus:ring-primary/20 pr-12"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-primary/60 hover:text-primary"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-primary"
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
             </div>
             <Button
               type="submit"
-              className="w-full bg-gradient-to-r from-primary to-secondary hover:from-primary-dark hover:to-secondary-dark text-white font-medium py-2.5 shadow-lg"
+              className="w-full h-12 bg-gradient-to-r from-primary to-secondary hover:from-primary-dark hover:to-secondary-dark text-white font-medium shadow-lg text-base"
               disabled={isLoading}
             >
               {isLoading ? "Entrando..." : "Entrar"}
             </Button>
           </form>
           
-          <div className="mt-6 p-4 bg-primary/5 rounded-lg border border-primary/20">
-            <p className="text-xs text-primary/70 font-medium mb-2">Credenciais de teste:</p>
-            <div className="text-xs space-y-1 text-primary/60">
-              <div><strong>Admin:</strong> admin@admin.com / admin</div>
-              <div><strong>Médico:</strong> medico@medico.com / medico</div>
+          <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <p className="text-sm text-gray-700 font-medium mb-2">Credenciais de teste:</p>
+            <div className="text-sm space-y-1 text-gray-600">
+              <div><strong className="text-gray-800">Admin:</strong> admin@admin.com / admin</div>
+              <div><strong className="text-gray-800">Médico:</strong> medico@medico.com / medico</div>
             </div>
           </div>
         </CardContent>

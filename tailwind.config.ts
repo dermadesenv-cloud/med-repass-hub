@@ -1,4 +1,3 @@
-
 import type { Config } from "tailwindcss";
 
 export default {
@@ -26,28 +25,28 @@ export default {
 				background: 'hsl(var(--background))',
 				foreground: 'hsl(var(--foreground))',
 				primary: {
-					DEFAULT: 'hsl(210, 100%, 85%)',
-					foreground: 'hsl(210, 100%, 20%)',
-					light: 'hsl(210, 100%, 90%)',
-					dark: 'hsl(210, 100%, 70%)'
+					DEFAULT: 'hsl(210, 100%, 50%)',
+					foreground: 'hsl(0, 0%, 100%)',
+					light: 'hsl(210, 100%, 95%)',
+					dark: 'hsl(210, 100%, 40%)'
 				},
 				secondary: {
-					DEFAULT: 'hsl(280, 50%, 85%)',
-					foreground: 'hsl(280, 50%, 20%)',
-					light: 'hsl(280, 50%, 90%)',
-					dark: 'hsl(280, 50%, 70%)'
+					DEFAULT: 'hsl(280, 60%, 50%)',
+					foreground: 'hsl(0, 0%, 100%)',
+					light: 'hsl(280, 60%, 95%)',
+					dark: 'hsl(280, 60%, 40%)'
 				},
 				accent: {
-					DEFAULT: 'hsl(240, 60%, 88%)',
-					foreground: 'hsl(240, 60%, 25%)'
+					DEFAULT: 'hsl(240, 50%, 90%)',
+					foreground: 'hsl(240, 50%, 20%)'
 				},
 				destructive: {
-					DEFAULT: 'hsl(0 84.2% 60.2%)',
-					foreground: 'hsl(210 40% 98%)'
+					DEFAULT: 'hsl(0, 84%, 60%)',
+					foreground: 'hsl(0, 0%, 100%)'
 				},
 				muted: {
-					DEFAULT: 'hsl(220, 20%, 95%)',
-					foreground: 'hsl(220, 20%, 45%)'
+					DEFAULT: 'hsl(220, 15%, 95%)',
+					foreground: 'hsl(220, 15%, 40%)'
 				},
 				popover: {
 					DEFAULT: 'hsl(var(--popover))',
