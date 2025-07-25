@@ -48,25 +48,19 @@ export function AppSidebar() {
 
   return (
     <Sidebar className={isCollapsed ? "w-14" : "w-64"} collapsible="icon">
-      <SidebarContent className="bg-gray-50 border-r-2 border-gray-200">
-        <div className="p-4 border-b border-gray-200 bg-white">
-          <div className="flex items-center gap-3">
+      <SidebarContent className="bg-blue-50 border-r-2 border-blue-200">
+        <div className="p-4 border-b border-blue-200 bg-blue-50">
+          <div className="flex items-center justify-center">
             <img 
               src="/lovable-uploads/1f27fba1-1c30-44f2-8802-66b0a90188e8.png" 
-              alt="MedPay Logo" 
+              alt="Logo" 
               className="h-10 w-auto"
             />
-            {!isCollapsed && (
-              <div className="flex flex-col">
-                <span className="text-xl font-bold text-gray-800">MedControl</span>
-                <span className="text-sm text-gray-600">Sistema de Repasse</span>
-              </div>
-            )}
           </div>
         </div>
 
         <SidebarGroup className="px-2 py-4">
-          <SidebarGroupLabel className="text-gray-700 font-semibold px-3 py-2 text-sm">Menu Principal</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-blue-800 font-semibold px-3 py-2 text-sm">Menu Principal</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {filteredItems.map((item) => (
@@ -77,8 +71,8 @@ export function AppSidebar() {
                       className={({ isActive }) => 
                         `flex items-center gap-3 px-3 py-2.5 mx-2 rounded-lg transition-all duration-200 ${
                           isActive 
-                            ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg font-semibold' 
-                            : 'text-gray-700 hover:bg-white hover:shadow-md hover:text-blue-600'
+                            ? 'bg-blue-600 text-white shadow-lg font-semibold' 
+                            : 'text-blue-800 hover:bg-blue-100 hover:shadow-md'
                         }`
                       }
                     >
