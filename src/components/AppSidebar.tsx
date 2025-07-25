@@ -25,7 +25,7 @@ import {
 import { useAuth } from '@/context/AuthContext';
 
 export function AppSidebar() {
-  const { collapsed } = useSidebar();
+  const { state } = useSidebar();
   const location = useLocation();
   const { user } = useAuth();
 
@@ -44,14 +44,14 @@ export function AppSidebar() {
     user && item.roles.includes(user.role)
   );
 
-  const isActive = (path: string) => location.pathname === path;
+  const isCollapsed = state === "collapsed";
 
   return (
-    <Sidebar className={collapsed ? "w-14" : "w-64"} collapsible>
+    <Sidebar className={isCollapsed ? "w-14" : "w-64"} collapsible="icon">
       <SidebarContent className="bg-white/90 backdrop-blur-sm border-r border-white/20">
         <div className="p-4">
           <div className="flex items-center gap-2">
-            {!collapsed && (
+            {!isCollapsed && (
               <div className="flex flex-col">
                 <span className="text-sm font-semibold text-primary">MedControl</span>
                 <span className="text-xs text-secondary">Sistema de Repasse</span>
@@ -78,7 +78,7 @@ export function AppSidebar() {
                       }
                     >
                       <item.icon className="h-5 w-5" />
-                      {!collapsed && <span>{item.title}</span>}
+                      {!isCollapsed && <span>{item.title}</span>}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

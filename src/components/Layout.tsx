@@ -16,7 +16,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   }
 
   return (
-    <SidebarProvider collapsedWidth={56}>
+    <SidebarProvider>
       <div className="min-h-screen flex w-full bg-gradient-to-br from-primary-light to-secondary-light">
         <AppSidebar />
         <div className="flex-1 flex flex-col">
