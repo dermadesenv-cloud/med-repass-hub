@@ -62,7 +62,7 @@ const Procedimentos = () => {
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [editingProcedimento, setEditingProcedimento] = useState<Procedimento | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategoria, setSelectedCategoria] = useState<string>('');
+  const [selectedCategoria, setSelectedCategoria] = useState<string>('todas');
   const [formData, setFormData] = useState({
     nome: '',
     valor: '',
@@ -97,7 +97,7 @@ const Procedimentos = () => {
       );
     }
 
-    if (selectedCategoria) {
+    if (selectedCategoria && selectedCategoria !== 'todas') {
       filtered = filtered.filter(proc => proc.categoria === selectedCategoria);
     }
 
@@ -393,7 +393,7 @@ const Procedimentos = () => {
                   <SelectValue placeholder="Todas as categorias" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todas as categorias</SelectItem>
+                  <SelectItem value="todas">Todas as categorias</SelectItem>
                   {categorias.map(cat => (
                     <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                   ))}
