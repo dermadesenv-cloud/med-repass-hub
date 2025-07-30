@@ -24,7 +24,7 @@ interface Procedimento {
 }
 
 const Procedimentos = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [procedimentos, setProcedimentos] = useState<Procedimento[]>([
     {
       id: '1',
@@ -85,8 +85,8 @@ const Procedimentos = () => {
     let filtered = procedimentos;
     
     // Se não for admin, mostrar apenas os procedimentos da empresa do usuário
-    if (user?.role !== 'admin' && user?.companyId) {
-      filtered = filtered.filter(proc => proc.empresaId === user.companyId);
+    if (profile?.role !== 'admin' && profile?.empresa_id) {
+      filtered = filtered.filter(proc => proc.empresaId === profile.empresa_id);
     }
 
     // Aplicar filtros de busca
@@ -240,7 +240,7 @@ const Procedimentos = () => {
             Exportar CSV
           </Button>
           
-          {user?.role === 'admin' && (
+          {profile?.role === 'admin' && (
             <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline">
@@ -336,7 +336,7 @@ const Procedimentos = () => {
                   </Select>
                 </div>
                 
-                {user?.role === 'admin' && (
+                {profile?.role === 'admin' && (
                   <div className="space-y-2">
                     <Label htmlFor="empresa">Empresa</Label>
                     <Select 
@@ -420,7 +420,7 @@ const Procedimentos = () => {
                   <TableHead>Nome</TableHead>
                   <TableHead>Categoria</TableHead>
                   <TableHead>Valor</TableHead>
-                  {user?.role === 'admin' && <TableHead>Empresa</TableHead>}
+                  {profile?.role === 'admin' && <TableHead>Empresa</TableHead>}
                   <TableHead>Status</TableHead>
                   <TableHead>Data Cadastro</TableHead>
                   <TableHead>Ações</TableHead>
@@ -440,7 +440,7 @@ const Procedimentos = () => {
                     <TableCell className="font-semibold text-green-600">
                       R$ {procedimento.valor.toFixed(2)}
                     </TableCell>
-                    {user?.role === 'admin' && (
+                    {profile?.role === 'admin' && (
                       <TableCell>{procedimento.empresaNome}</TableCell>
                     )}
                     <TableCell>
@@ -460,7 +460,7 @@ const Procedimentos = () => {
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
-                        {user?.role === 'admin' && (
+                        {profile?.role === 'admin' && (
                           <Button
                             variant="outline"
                             size="sm"
