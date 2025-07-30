@@ -14,16 +14,386 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      configuracoes: {
+        Row: {
+          chave: string
+          created_at: string
+          descricao: string | null
+          id: string
+          tipo: string
+          updated_at: string
+          valor: string
+        }
+        Insert: {
+          chave: string
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          tipo?: string
+          updated_at?: string
+          valor: string
+        }
+        Update: {
+          chave?: string
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          tipo?: string
+          updated_at?: string
+          valor?: string
+        }
+        Relationships: []
+      }
+      empresas: {
+        Row: {
+          cnpj: string
+          created_at: string
+          email: string
+          endereco: string | null
+          id: string
+          nome: string
+          status: Database["public"]["Enums"]["status_type"]
+          telefone: string | null
+          updated_at: string
+        }
+        Insert: {
+          cnpj: string
+          created_at?: string
+          email: string
+          endereco?: string | null
+          id?: string
+          nome: string
+          status?: Database["public"]["Enums"]["status_type"]
+          telefone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cnpj?: string
+          created_at?: string
+          email?: string
+          endereco?: string | null
+          id?: string
+          nome?: string
+          status?: Database["public"]["Enums"]["status_type"]
+          telefone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      lancamento_itens: {
+        Row: {
+          created_at: string
+          id: string
+          lancamento_id: string
+          procedimento_id: string
+          quantidade: number
+          valor_total: number
+          valor_unitario: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          lancamento_id: string
+          procedimento_id: string
+          quantidade?: number
+          valor_total: number
+          valor_unitario: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          lancamento_id?: string
+          procedimento_id?: string
+          quantidade?: number
+          valor_total?: number
+          valor_unitario?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lancamento_itens_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "lancamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lancamento_itens_procedimento_id_fkey"
+            columns: ["procedimento_id"]
+            isOneToOne: false
+            referencedRelation: "procedimentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lancamentos: {
+        Row: {
+          created_at: string
+          created_by: string
+          data_lancamento: string
+          empresa_id: string
+          id: string
+          medico_id: string
+          observacoes: string | null
+          updated_at: string
+          valor_total: number
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          data_lancamento: string
+          empresa_id: string
+          id?: string
+          medico_id: string
+          observacoes?: string | null
+          updated_at?: string
+          valor_total?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          data_lancamento?: string
+          empresa_id?: string
+          id?: string
+          medico_id?: string
+          observacoes?: string | null
+          updated_at?: string
+          valor_total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lancamentos_empresa_id_fkey"
+            columns: ["empresa_id"]
+            isOneToOne: false
+            referencedRelation: "empresas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lancamentos_medico_id_fkey"
+            columns: ["medico_id"]
+            isOneToOne: false
+            referencedRelation: "medicos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      medicos: {
+        Row: {
+          created_at: string
+          crm: string
+          email: string | null
+          empresa_id: string | null
+          especialidade: string | null
+          id: string
+          nome: string
+          status: Database["public"]["Enums"]["status_type"]
+          telefone: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          crm: string
+          email?: string | null
+          empresa_id?: string | null
+          especialidade?: string | null
+          id?: string
+          nome: string
+          status?: Database["public"]["Enums"]["status_type"]
+          telefone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          crm?: string
+          email?: string | null
+          empresa_id?: string | null
+          especialidade?: string | null
+          id?: string
+          nome?: string
+          status?: Database["public"]["Enums"]["status_type"]
+          telefone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "medicos_empresa_id_fkey"
+            columns: ["empresa_id"]
+            isOneToOne: false
+            referencedRelation: "empresas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pagamentos: {
+        Row: {
+          created_at: string
+          data_pagamento: string | null
+          data_vencimento: string
+          empresa_id: string
+          id: string
+          lancamento_id: string
+          medico_id: string
+          observacoes: string | null
+          status: Database["public"]["Enums"]["pagamento_status"]
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          created_at?: string
+          data_pagamento?: string | null
+          data_vencimento: string
+          empresa_id: string
+          id?: string
+          lancamento_id: string
+          medico_id: string
+          observacoes?: string | null
+          status?: Database["public"]["Enums"]["pagamento_status"]
+          updated_at?: string
+          valor: number
+        }
+        Update: {
+          created_at?: string
+          data_pagamento?: string | null
+          data_vencimento?: string
+          empresa_id?: string
+          id?: string
+          lancamento_id?: string
+          medico_id?: string
+          observacoes?: string | null
+          status?: Database["public"]["Enums"]["pagamento_status"]
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pagamentos_empresa_id_fkey"
+            columns: ["empresa_id"]
+            isOneToOne: false
+            referencedRelation: "empresas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pagamentos_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "lancamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pagamentos_medico_id_fkey"
+            columns: ["medico_id"]
+            isOneToOne: false
+            referencedRelation: "medicos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      procedimentos: {
+        Row: {
+          categoria: string | null
+          codigo: string | null
+          created_at: string
+          empresa_id: string | null
+          id: string
+          nome: string
+          status: Database["public"]["Enums"]["procedimento_status"]
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          categoria?: string | null
+          codigo?: string | null
+          created_at?: string
+          empresa_id?: string | null
+          id?: string
+          nome: string
+          status?: Database["public"]["Enums"]["procedimento_status"]
+          updated_at?: string
+          valor: number
+        }
+        Update: {
+          categoria?: string | null
+          codigo?: string | null
+          created_at?: string
+          empresa_id?: string | null
+          id?: string
+          nome?: string
+          status?: Database["public"]["Enums"]["procedimento_status"]
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "procedimentos_empresa_id_fkey"
+            columns: ["empresa_id"]
+            isOneToOne: false
+            referencedRelation: "empresas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string
+          empresa_id: string | null
+          id: string
+          nome: string
+          role: Database["public"]["Enums"]["user_role"]
+          telefone: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          empresa_id?: string | null
+          id?: string
+          nome: string
+          role?: Database["public"]["Enums"]["user_role"]
+          telefone?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          empresa_id?: string | null
+          id?: string
+          nome?: string
+          role?: Database["public"]["Enums"]["user_role"]
+          telefone?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_profiles_empresa"
+            columns: ["empresa_id"]
+            isOneToOne: false
+            referencedRelation: "empresas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_user_empresa: {
+        Args: { user_uuid: string }
+        Returns: string
+      }
+      get_user_role: {
+        Args: { user_uuid: string }
+        Returns: string
+      }
     }
     Enums: {
-      [_ in never]: never
+      pagamento_status: "pendente" | "pago" | "cancelado"
+      procedimento_status: "ativo" | "inativo"
+      status_type: "ativa" | "inativa"
+      user_role: "admin" | "usuario" | "medico"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +520,11 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      pagamento_status: ["pendente", "pago", "cancelado"],
+      procedimento_status: ["ativo", "inativo"],
+      status_type: ["ativa", "inativa"],
+      user_role: ["admin", "usuario", "medico"],
+    },
   },
 } as const
