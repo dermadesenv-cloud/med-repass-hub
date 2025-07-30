@@ -11,8 +11,12 @@ import { Layout } from "./components/Layout";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Medicos from "./pages/Medicos";
+import Empresas from "./pages/Empresas";
 import Procedimentos from "./pages/Procedimentos";
+import Relatorios from "./pages/Relatorios";
 import Pagamentos from "./pages/Pagamentos";
+import Usuarios from "./pages/Usuarios";
+import Configuracoes from "./pages/Configuracoes";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -62,6 +66,14 @@ const AppRoutes = () => {
         } 
       />
       <Route 
+        path="/empresas" 
+        element={
+          <ProtectedRoute>
+            {user?.role === 'admin' ? <Empresas /> : <Navigate to="/dashboard" replace />}
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
         path="/procedimentos" 
         element={
           <ProtectedRoute>
@@ -70,10 +82,34 @@ const AppRoutes = () => {
         } 
       />
       <Route 
+        path="/relatorios" 
+        element={
+          <ProtectedRoute>
+            <Relatorios />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
         path="/pagamentos" 
         element={
           <ProtectedRoute>
             {user?.role === 'admin' ? <Pagamentos /> : <Navigate to="/dashboard" replace />}
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/usuarios" 
+        element={
+          <ProtectedRoute>
+            {user?.role === 'admin' ? <Usuarios /> : <Navigate to="/dashboard" replace />}
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/configuracoes" 
+        element={
+          <ProtectedRoute>
+            <Configuracoes />
           </ProtectedRoute>
         } 
       />
