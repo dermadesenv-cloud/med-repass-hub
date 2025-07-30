@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -58,10 +57,9 @@ const Login = () => {
             <img 
               src="/lovable-uploads/1f27fba1-1c30-44f2-8802-66b0a90188e8.png" 
               alt="MedPay Logo" 
-              className="h-16 w-auto mx-auto mb-4"
+              className="h-24 w-auto mx-auto mb-6"
             />
           </div>
-          <CardTitle className="text-3xl font-bold text-gray-800">MedControl</CardTitle>
           <CardDescription className="text-gray-600 text-base">
             Sistema de Controle de Repasse Médico
           </CardDescription>
