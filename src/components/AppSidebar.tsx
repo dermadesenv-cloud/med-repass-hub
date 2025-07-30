@@ -71,7 +71,7 @@ export function AppSidebar() {
                       className={({ isActive }) => 
                         `flex items-center gap-3 px-3 py-2.5 mx-2 rounded-lg transition-all duration-200 ${
                           isActive 
-                            ? 'bg-blue-600 text-white shadow-lg font-semibold' 
+                            ? 'bg-blue-600 text-blue-800 shadow-lg font-semibold' 
                             : 'text-blue-800 hover:bg-blue-100 hover:shadow-md'
                         }`
                       }
