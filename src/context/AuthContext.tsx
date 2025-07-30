@@ -24,6 +24,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, nome: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   updateProfile: (data: Partial<Profile>) => Promise<{ error: any }>;
+  createAdminUser: () => Promise<{ error: any }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -48,12 +49,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('Error fetching profile:', error);
         if (error.code === 'PGRST116') {
           console.log('Profile not found, user may need to complete signup');
-        } else {
-          toast({
-            title: "Erro ao carregar perfil",
-            description: "Erro ao carregar dados do usuário.",
-            variant: "destructive"
-          });
         }
         setProfile(null);
         return;
@@ -67,11 +62,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const createAdminUser = async () => {
+    try {
+      console.log('Creating admin user...');
+      
+      // First try to sign up the admin user
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email: 'admin@medpay.com',
+        password: 'admin123',
+        options: {
+          data: {
+            nome: 'Administrador'
+          }
+        }
+      });
+
+      if (signUpError && !signUpError.message.includes('User already registered')) {
+        console.error('Error creating admin user:', signUpError);
+        return { error: signUpError };
+      }
+
+      console.log('Admin user creation response:', signUpData);
+
+      // If user was created or already exists, try to create/update profile
+      if (signUpData.user) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .upsert({
+            user_id: signUpData.user.id,
+            nome: 'Administrador',
+            email: 'admin@medpay.com',
+            role: 'admin'
+          });
+
+        if (profileError) {
+          console.error('Error creating admin profile:', profileError);
+          return { error: profileError };
+        }
+      }
+
+      console.log('Admin user and profile created successfully');
+      return { error: null };
+    } catch (error) {
+      console.error('Exception in createAdminUser:', error);
+      return { error };
+    }
+  };
+
   useEffect(() => {
     console.log('AuthProvider: Setting up auth state listener');
     let mounted = true;
     
-    // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!mounted) return;
@@ -83,7 +124,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         if (session?.user) {
           console.log('User authenticated, fetching profile...');
-          // Small delay to avoid potential race conditions
           setTimeout(() => {
             if (mounted) {
               fetchProfile(session.user.id);
@@ -98,7 +138,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
-    // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session }, error }) => {
       if (!mounted) return;
       
@@ -135,6 +174,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('Attempting sign in for:', email);
       setLoading(true);
       
+      // If it's the admin trying to login and it fails, try to create the admin user first
+      if (email.toLowerCase() === 'admin@medpay.com') {
+        console.log('Admin login detected, ensuring admin user exists...');
+        await createAdminUser();
+      }
+      
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim().toLowerCase(),
         password,
@@ -143,11 +188,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) {
         console.error('Sign in error:', error.message, error.status);
         
-        // Provide more specific error messages
         let errorMessage = "Erro no login";
         let errorDescription = "Verifique suas credenciais e tente novamente.";
         
         if (error.message.includes('Invalid login credentials')) {
+          if (email.toLowerCase() === 'admin@medpay.com') {
+            errorDescription = "Usuário admin não encontrado. Tentando criar...";
+            // Try to create admin user and retry login
+            const createResult = await createAdminUser();
+            if (!createResult.error) {
+              // Retry login after creating admin user
+              console.log('Retrying admin login after user creation...');
+              const { data: retryData, error: retryError } = await supabase.auth.signInWithPassword({
+                email: email.trim().toLowerCase(),
+                password,
+              });
+              
+              if (!retryError) {
+                console.log('Admin login successful after user creation');
+                toast({
+                  title: "Login realizado com sucesso!",
+                  description: "Bem-vindo, Administrador!",
+                });
+                setLoading(false);
+                return { error: null };
+              }
+            }
+          }
           errorDescription = "Email ou senha incorretos.";
         } else if (error.message.includes('Email not confirmed')) {
           errorDescription = "Por favor, confirme seu email antes de fazer login.";
@@ -171,7 +238,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         description: "Bem-vindo de volta.",
       });
       
-      // Don't set loading to false here - let the auth state change handle it
       return { error: null };
     } catch (error) {
       console.error('Sign in exception:', error);
@@ -253,7 +319,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           variant: "destructive"
         });
       } else {
-        // Refresh profile data
         await fetchProfile(user.id);
         toast({
           title: "Perfil atualizado",
@@ -277,6 +342,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signUp,
     signOut,
     updateProfile,
+    createAdminUser,
   };
 
   return (

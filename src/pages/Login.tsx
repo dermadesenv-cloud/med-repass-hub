@@ -7,14 +7,15 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle, UserPlus } from 'lucide-react';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { signIn, loading: authLoading } = useAuth();
+  const [isCreatingAdmin, setIsCreatingAdmin] = useState(false);
+  const { signIn, createAdminUser, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -49,6 +50,39 @@ const Login = () => {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleCreateAdmin = async () => {
+    setIsCreatingAdmin(true);
+    try {
+      console.log('Creating admin user manually...');
+      const { error } = await createAdminUser();
+      
+      if (error) {
+        toast({
+          title: "Erro ao criar usuário admin",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Usuário admin criado!",
+          description: "Agora você pode fazer login com admin@medpay.com / admin123",
+        });
+        // Auto-fill the form
+        setEmail('admin@medpay.com');
+        setPassword('admin123');
+      }
+    } catch (error) {
+      console.error('Error creating admin:', error);
+      toast({
+        title: "Erro inesperado",
+        description: "Tente novamente mais tarde.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCreatingAdmin(false);
     }
   };
 
@@ -123,6 +157,29 @@ const Login = () => {
             <div className="text-sm space-y-1 text-gray-600">
               <div><strong className="text-gray-800">Admin:</strong> admin@medpay.com / admin123</div>
             </div>
+          </div>
+
+          {/* Admin creation button */}
+          <div className="mt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCreateAdmin}
+              disabled={isCreatingAdmin}
+              className="w-full h-10 border-orange-200 text-orange-600 hover:bg-orange-50"
+            >
+              {isCreatingAdmin ? (
+                "Criando usuário admin..."
+              ) : (
+                <>
+                  <UserPlus className="w-4 h-4 mr-2" />
+                  Criar usuário admin
+                </>
+              )}
+            </Button>
+            <p className="text-xs text-gray-500 mt-1 text-center">
+              Use apenas se o login admin não funcionar
+            </p>
           </div>
 
           {/* Debug info - only show in development */}
