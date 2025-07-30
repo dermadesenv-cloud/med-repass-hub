@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -57,7 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      console.log('Profile loaded:', data);
+      console.log('Profile loaded successfully:', data);
       setProfile(data);
     } catch (error) {
       console.error('Error in fetchProfile:', error);
@@ -70,16 +69,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth state changed:', event, session?.user?.email);
+        console.log('Auth state changed:', event, 'User:', session?.user?.email);
         setSession(session);
         setUser(session?.user ?? null);
         
         if (session?.user) {
+          console.log('User authenticated, fetching profile...');
           // Defer profile fetch to avoid deadlock
           setTimeout(() => {
             fetchProfile(session.user.id);
           }, 100);
         } else {
+          console.log('No user session, clearing profile');
           setProfile(null);
         }
         
@@ -89,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('Initial session check:', session?.user?.email);
+      console.log('Initial session check:', session?.user?.email || 'No session');
       setSession(session);
       setUser(session?.user ?? null);
       
@@ -111,21 +112,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = async (email: string, password: string) => {
     try {
       console.log('Attempting sign in for:', email);
+      setLoading(true);
+      
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: email.trim().toLowerCase(),
         password,
       });
 
       if (error) {
-        console.error('Sign in error:', error);
+        console.error('Sign in error:', error.message, error.status);
+        
+        // Provide more specific error messages
+        let errorMessage = "Erro no login";
+        let errorDescription = "Verifique suas credenciais e tente novamente.";
+        
+        if (error.message.includes('Invalid login credentials')) {
+          errorDescription = "Email ou senha incorretos.";
+        } else if (error.message.includes('Email not confirmed')) {
+          errorDescription = "Por favor, confirme seu email antes de fazer login.";
+        } else if (error.message.includes('Too many requests')) {
+          errorDescription = "Muitas tentativas de login. Aguarde alguns minutos.";
+        }
+        
+        toast({
+          title: errorMessage,
+          description: errorDescription,
+          variant: "destructive"
+        });
+        
         return { error };
       }
 
-      console.log('Sign in successful:', data.user?.email);
+      console.log('Sign in successful for:', data.user?.email);
+      toast({
+        title: "Login realizado com sucesso!",
+        description: "Bem-vindo de volta.",
+      });
+      
       return { error: null };
     } catch (error) {
       console.error('Sign in exception:', error);
+      toast({
+        title: "Erro no servidor",
+        description: "Erro inesperado. Tente novamente.",
+        variant: "destructive"
+      });
       return { error };
+    } finally {
+      setLoading(false);
     }
   };
 
