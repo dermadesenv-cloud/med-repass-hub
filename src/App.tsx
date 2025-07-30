@@ -22,14 +22,14 @@ import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading } = useAuth();
+  const { user, profile, loading } = useAuth();
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-light to-secondary-light">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-100 to-purple-100">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-primary">Carregando...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+          <p className="mt-4 text-blue-600">Carregando...</p>
         </div>
       </div>
     );
@@ -40,6 +40,16 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   }
 
   return <Layout>{children}</Layout>;
+};
+
+const AdminRoute = ({ children }: { children: React.ReactNode }) => {
+  const { profile } = useAuth();
+  
+  if (profile?.role !== 'admin') {
+    return <Navigate to="/dashboard" replace />;
+  }
+  
+  return <>{children}</>;
 };
 
 const AppRoutes = () => {
@@ -61,7 +71,9 @@ const AppRoutes = () => {
         path="/medicos" 
         element={
           <ProtectedRoute>
-            {user?.role === 'admin' ? <Medicos /> : <Navigate to="/dashboard" replace />}
+            <AdminRoute>
+              <Medicos />
+            </AdminRoute>
           </ProtectedRoute>
         } 
       />
@@ -69,7 +81,9 @@ const AppRoutes = () => {
         path="/empresas" 
         element={
           <ProtectedRoute>
-            {user?.role === 'admin' ? <Empresas /> : <Navigate to="/dashboard" replace />}
+            <AdminRoute>
+              <Empresas />
+            </AdminRoute>
           </ProtectedRoute>
         } 
       />
@@ -93,7 +107,9 @@ const AppRoutes = () => {
         path="/pagamentos" 
         element={
           <ProtectedRoute>
-            {user?.role === 'admin' ? <Pagamentos /> : <Navigate to="/dashboard" replace />}
+            <AdminRoute>
+              <Pagamentos />
+            </AdminRoute>
           </ProtectedRoute>
         } 
       />
@@ -101,7 +117,9 @@ const AppRoutes = () => {
         path="/usuarios" 
         element={
           <ProtectedRoute>
-            {user?.role === 'admin' ? <Usuarios /> : <Navigate to="/dashboard" replace />}
+            <AdminRoute>
+              <Usuarios />
+            </AdminRoute>
           </ProtectedRoute>
         } 
       />

@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { Eye, EyeOff } from 'lucide-react';
@@ -23,7 +23,9 @@ const Login = () => {
     setIsLoading(true);
 
     try {
+      console.log('Login attempt for:', email);
       const { error } = await signIn(email, password);
+      
       if (!error) {
         toast({
           title: "Login realizado com sucesso!",
@@ -31,6 +33,7 @@ const Login = () => {
         });
         navigate('/dashboard');
       } else {
+        console.error('Login error:', error);
         toast({
           title: "Erro no login",
           description: "Email ou senha incorretos.",
@@ -38,6 +41,7 @@ const Login = () => {
         });
       }
     } catch (error) {
+      console.error('Login exception:', error);
       toast({
         title: "Erro no servidor",
         description: "Tente novamente mais tarde.",
@@ -54,11 +58,11 @@ const Login = () => {
       
       <Card className="w-full max-w-md mx-4 shadow-2xl border-0 bg-white backdrop-blur-sm animate-fade-in">
         <CardHeader className="text-center pb-6">
-          <div className="mx-auto mb-8 flex justify-center items-center">
+          <div className="mx-auto mb-4 flex justify-center items-center">
             <img 
               src="/lovable-uploads/1f27fba1-1c30-44f2-8802-66b0a90188e8.png" 
               alt="MedPay Logo" 
-              className="h-32 w-auto"
+              className="h-24 w-auto"
             />
           </div>
         </CardHeader>
