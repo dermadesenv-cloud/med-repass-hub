@@ -46,13 +46,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) {
         console.error('Error fetching profile:', error);
-        if (error.code !== 'PGRST116') { // Not found error
+        if (error.code === 'PGRST116') {
+          console.log('Profile not found, user may need to complete signup');
+        } else {
           toast({
             title: "Erro ao carregar perfil",
             description: "Erro ao carregar dados do usuário.",
             variant: "destructive"
           });
         }
+        setProfile(null);
         return;
       }
 
@@ -60,24 +63,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfile(data);
     } catch (error) {
       console.error('Error in fetchProfile:', error);
+      setProfile(null);
     }
   };
 
   useEffect(() => {
-    console.log('Setting up auth state listener');
+    console.log('AuthProvider: Setting up auth state listener');
+    let mounted = true;
     
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth state changed:', event, 'User:', session?.user?.email);
+        if (!mounted) return;
+        
+        console.log('Auth state changed:', event, 'User:', session?.user?.email || 'No user');
+        
         setSession(session);
         setUser(session?.user ?? null);
         
         if (session?.user) {
           console.log('User authenticated, fetching profile...');
-          // Defer profile fetch to avoid deadlock
+          // Small delay to avoid potential race conditions
           setTimeout(() => {
-            fetchProfile(session.user.id);
+            if (mounted) {
+              fetchProfile(session.user.id);
+            }
           }, 100);
         } else {
           console.log('No user session, clearing profile');
@@ -89,22 +99,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     );
 
     // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (!mounted) return;
+      
+      if (error) {
+        console.error('Error getting session:', error);
+        setLoading(false);
+        return;
+      }
+      
       console.log('Initial session check:', session?.user?.email || 'No session');
       setSession(session);
       setUser(session?.user ?? null);
       
       if (session?.user) {
         setTimeout(() => {
-          fetchProfile(session.user.id);
+          if (mounted) {
+            fetchProfile(session.user.id);
+          }
         }, 100);
+      } else {
+        setLoading(false);
       }
-      
-      setLoading(false);
     });
 
     return () => {
-      console.log('Cleaning up auth subscription');
+      console.log('AuthProvider: Cleaning up auth subscription');
+      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
@@ -140,6 +161,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           variant: "destructive"
         });
         
+        setLoading(false);
         return { error };
       }
 
@@ -149,17 +171,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         description: "Bem-vindo de volta.",
       });
       
+      // Don't set loading to false here - let the auth state change handle it
       return { error: null };
     } catch (error) {
       console.error('Sign in exception:', error);
+      setLoading(false);
       toast({
         title: "Erro no servidor",
         description: "Erro inesperado. Tente novamente.",
         variant: "destructive"
       });
       return { error };
-    } finally {
-      setLoading(false);
     }
   };
 
