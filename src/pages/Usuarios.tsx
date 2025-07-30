@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,125 +10,185 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Badge } from "@/components/ui/badge";
 import { Plus, Search, Edit2, Trash2, UserCheck, Shield, User } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/context/AuthContext";
 
-interface Usuario {
+interface Profile {
   id: string;
-  name: string;
+  user_id: string;
+  nome: string;
   email: string;
-  role: 'admin' | 'user';
-  status: 'ativo' | 'inativo';
-  lastLogin: string;
-  createdAt: string;
+  telefone: string | null;
+  role: 'admin' | 'usuario' | 'medico';
+  empresa_id: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 const Usuarios = () => {
   const { toast } = useToast();
-  const [usuarios, setUsuarios] = useState<Usuario[]>([
-    {
-      id: '1',
-      name: 'Administrador',
-      email: 'admin@sistema.com',
-      role: 'admin',
-      status: 'ativo',
-      lastLogin: '2024-01-30 09:30:00',
-      createdAt: '2024-01-01'
-    },
-    {
-      id: '2',
-      name: 'João Silva',
-      email: 'joao@sistema.com',
-      role: 'user',
-      status: 'ativo',
-      lastLogin: '2024-01-29 14:15:00',
-      createdAt: '2024-01-15'
-    },
-    {
-      id: '3',
-      name: 'Maria Santos',
-      email: 'maria@sistema.com',
-      role: 'user',
-      status: 'inativo',
-      lastLogin: '2024-01-20 11:00:00',
-      createdAt: '2024-01-10'
-    }
-  ]);
-
+  const { profile } = useAuth();
+  const [profiles, setProfiles] = useState<Profile[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingUsuario, setEditingUsuario] = useState<Usuario | null>(null);
+  const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
+    nome: '',
     email: '',
-    role: 'user' as 'admin' | 'user',
-    status: 'ativo' as 'ativo' | 'inativo',
+    telefone: '',
+    role: 'usuario' as 'admin' | 'usuario' | 'medico',
     password: ''
   });
 
-  const filteredUsuarios = usuarios.filter(usuario =>
-    usuario.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    usuario.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Verificar se o usuário é admin
+  const isAdmin = profile?.role === 'admin';
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (editingUsuario) {
-      setUsuarios(usuarios.map(usuario => 
-        usuario.id === editingUsuario.id 
-          ? { ...usuario, name: formData.name, email: formData.email, role: formData.role, status: formData.status }
-          : usuario
-      ));
-      toast({
-        title: "Usuário atualizado",
-        description: "Os dados do usuário foram atualizados com sucesso.",
-      });
-    } else {
-      const newUsuario: Usuario = {
-        id: Date.now().toString(),
-        name: formData.name,
-        email: formData.email,
-        role: formData.role,
-        status: formData.status,
-        lastLogin: 'Nunca',
-        createdAt: new Date().toISOString().split('T')[0]
-      };
-      setUsuarios([...usuarios, newUsuario]);
-      toast({
-        title: "Usuário cadastrado",
-        description: "Novo usuário foi cadastrado com sucesso.",
-      });
+  const fetchProfiles = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching profiles:', error);
+        toast({
+          title: "Erro",
+          description: "Erro ao carregar usuários.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setProfiles(data || []);
+    } catch (error) {
+      console.error('Error in fetchProfiles:', error);
     }
-
-    setFormData({
-      name: '',
-      email: '',
-      role: 'user',
-      status: 'ativo',
-      password: ''
-    });
-    setEditingUsuario(null);
-    setIsDialogOpen(false);
   };
 
-  const handleEdit = (usuario: Usuario) => {
-    setEditingUsuario(usuario);
+  useEffect(() => {
+    if (isAdmin) {
+      fetchProfiles();
+    }
+  }, [isAdmin]);
+
+  const filteredProfiles = profiles.filter(profile =>
+    profile.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    profile.email.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    
+    try {
+      if (editingProfile) {
+        // Atualizar perfil existente
+        const { error } = await supabase
+          .from('profiles')
+          .update({
+            nome: formData.nome,
+            email: formData.email,
+            telefone: formData.telefone,
+            role: formData.role
+          })
+          .eq('id', editingProfile.id);
+
+        if (error) throw error;
+
+        toast({
+          title: "Usuário atualizado",
+          description: "Os dados do usuário foram atualizados com sucesso.",
+        });
+      } else {
+        // Criar novo usuário
+        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+          email: formData.email,
+          password: formData.password,
+          email_confirm: true
+        });
+
+        if (authError) throw authError;
+
+        // Criar perfil
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert([{
+            user_id: authData.user.id,
+            nome: formData.nome,
+            email: formData.email,
+            telefone: formData.telefone,
+            role: formData.role
+          }]);
+
+        if (profileError) throw profileError;
+
+        toast({
+          title: "Usuário cadastrado",
+          description: "Novo usuário foi cadastrado com sucesso.",
+        });
+      }
+
+      await fetchProfiles();
+      setFormData({
+        nome: '',
+        email: '',
+        telefone: '',
+        role: 'usuario',
+        password: ''
+      });
+      setEditingProfile(null);
+      setIsDialogOpen(false);
+
+    } catch (error: any) {
+      console.error('Error saving user:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao salvar usuário.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEdit = (profile: Profile) => {
+    setEditingProfile(profile);
     setFormData({
-      name: usuario.name,
-      email: usuario.email,
-      role: usuario.role,
-      status: usuario.status,
+      nome: profile.nome,
+      email: profile.email,
+      telefone: profile.telefone || '',
+      role: profile.role,
       password: ''
     });
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-    setUsuarios(usuarios.filter(usuario => usuario.id !== id));
-    toast({
-      title: "Usuário removido",
-      description: "O usuário foi removido com sucesso.",
-      variant: "destructive"
-    });
+  const handleDelete = async (profile: Profile) => {
+    if (!confirm('Tem certeza que deseja remover este usuário?')) {
+      return;
+    }
+
+    try {
+      // Deletar do auth (isso também deletará o perfil por cascade)
+      const { error } = await supabase.auth.admin.deleteUser(profile.user_id);
+      
+      if (error) throw error;
+
+      await fetchProfiles();
+      toast({
+        title: "Usuário removido",
+        description: "O usuário foi removido com sucesso.",
+      });
+    } catch (error: any) {
+      console.error('Error deleting user:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao remover usuário.",
+        variant: "destructive"
+      });
+    }
   };
 
   const getRoleIcon = (role: string) => {
@@ -135,8 +196,20 @@ const Usuarios = () => {
   };
 
   const getRoleBadge = (role: string) => {
-    return role === 'admin' ? 'Administrador' : 'Usuário';
+    switch (role) {
+      case 'admin': return 'Administrador';
+      case 'medico': return 'Médico';
+      default: return 'Usuário';
+    }
   };
+
+  if (!isAdmin) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-gray-500">Você não tem permissão para acessar esta página.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -150,12 +223,12 @@ const Usuarios = () => {
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button onClick={() => {
-              setEditingUsuario(null);
+              setEditingProfile(null);
               setFormData({
-                name: '',
+                nome: '',
                 email: '',
-                role: 'user',
-                status: 'ativo',
+                telefone: '',
+                role: 'usuario',
                 password: ''
               });
             }}>
@@ -166,10 +239,10 @@ const Usuarios = () => {
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
               <DialogTitle>
-                {editingUsuario ? 'Editar Usuário' : 'Novo Usuário'}
+                {editingProfile ? 'Editar Usuário' : 'Novo Usuário'}
               </DialogTitle>
               <DialogDescription>
-                {editingUsuario 
+                {editingProfile 
                   ? 'Atualize as informações do usuário.' 
                   : 'Preencha os dados para cadastrar um novo usuário.'
                 }
@@ -177,11 +250,11 @@ const Usuarios = () => {
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Nome</Label>
+                <Label htmlFor="nome">Nome</Label>
                 <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  id="nome"
+                  value={formData.nome}
+                  onChange={(e) => setFormData({...formData, nome: e.target.value})}
                   required
                 />
               </div>
@@ -195,7 +268,15 @@ const Usuarios = () => {
                   required
                 />
               </div>
-              {!editingUsuario && (
+              <div className="space-y-2">
+                <Label htmlFor="telefone">Telefone</Label>
+                <Input
+                  id="telefone"
+                  value={formData.telefone}
+                  onChange={(e) => setFormData({...formData, telefone: e.target.value})}
+                />
+              </div>
+              {!editingProfile && (
                 <div className="space-y-2">
                   <Label htmlFor="password">Senha</Label>
                   <Input
@@ -209,31 +290,20 @@ const Usuarios = () => {
               )}
               <div className="space-y-2">
                 <Label htmlFor="role">Papel</Label>
-                <Select value={formData.role} onValueChange={(value: 'admin' | 'user') => setFormData({...formData, role: value})}>
+                <Select value={formData.role} onValueChange={(value: 'admin' | 'usuario' | 'medico') => setFormData({...formData, role: value})}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="user">Usuário</SelectItem>
+                    <SelectItem value="usuario">Usuário</SelectItem>
+                    <SelectItem value="medico">Médico</SelectItem>
                     <SelectItem value="admin">Administrador</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="status">Status</Label>
-                <Select value={formData.status} onValueChange={(value: 'ativo' | 'inativo') => setFormData({...formData, status: value})}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ativo">Ativo</SelectItem>
-                    <SelectItem value="inativo">Inativo</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
               <DialogFooter>
-                <Button type="submit">
-                  {editingUsuario ? 'Atualizar' : 'Cadastrar'}
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading ? 'Salvando...' : (editingProfile ? 'Atualizar' : 'Cadastrar')}
                 </Button>
               </DialogFooter>
             </form>
@@ -248,7 +318,7 @@ const Usuarios = () => {
             Lista de Usuários
           </CardTitle>
           <CardDescription>
-            Total de {usuarios.length} usuários cadastrados
+            Total de {profiles.length} usuários cadastrados
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -268,47 +338,41 @@ const Usuarios = () => {
                 <TableRow>
                   <TableHead>Nome</TableHead>
                   <TableHead>E-mail</TableHead>
+                  <TableHead>Telefone</TableHead>
                   <TableHead>Papel</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Último Login</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredUsuarios.map((usuario) => (
-                  <TableRow key={usuario.id}>
+                {filteredProfiles.map((userProfile) => (
+                  <TableRow key={userProfile.id}>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
-                        {getRoleIcon(usuario.role)}
-                        {usuario.name}
+                        {getRoleIcon(userProfile.role)}
+                        {userProfile.nome}
                       </div>
                     </TableCell>
-                    <TableCell>{usuario.email}</TableCell>
+                    <TableCell>{userProfile.email}</TableCell>
+                    <TableCell>{userProfile.telefone || '-'}</TableCell>
                     <TableCell>
-                      <Badge variant={usuario.role === 'admin' ? 'default' : 'secondary'}>
-                        {getRoleBadge(usuario.role)}
+                      <Badge variant={userProfile.role === 'admin' ? 'default' : 'secondary'}>
+                        {getRoleBadge(userProfile.role)}
                       </Badge>
                     </TableCell>
-                    <TableCell>
-                      <Badge variant={usuario.status === 'ativo' ? 'default' : 'secondary'}>
-                        {usuario.status === 'ativo' ? 'Ativo' : 'Inativo'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{usuario.lastLogin}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end space-x-2">
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleEdit(usuario)}
+                          onClick={() => handleEdit(userProfile)}
                         >
                           <Edit2 className="h-4 w-4" />
                         </Button>
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleDelete(usuario.id)}
-                          disabled={usuario.role === 'admin' && usuario.id === '1'}
+                          onClick={() => handleDelete(userProfile)}
+                          disabled={userProfile.role === 'admin' && userProfile.id === profile?.id}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>

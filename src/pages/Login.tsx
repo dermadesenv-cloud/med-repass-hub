@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -53,16 +54,13 @@ const Login = () => {
       
       <Card className="w-full max-w-md mx-4 shadow-2xl border-0 bg-white backdrop-blur-sm animate-fade-in">
         <CardHeader className="text-center pb-6">
-          <div className="mx-auto mb-6">
+          <div className="mx-auto mb-8 flex justify-center items-center">
             <img 
               src="/lovable-uploads/1f27fba1-1c30-44f2-8802-66b0a90188e8.png" 
               alt="MedPay Logo" 
-              className="h-24 w-auto mx-auto mb-6"
+              className="h-32 w-auto"
             />
           </div>
-          <CardDescription className="text-gray-600 text-base">
-            Sistema de Controle de Repasse Médico
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -111,8 +109,7 @@ const Login = () => {
           <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
             <p className="text-sm text-gray-700 font-medium mb-2">Credenciais de teste:</p>
             <div className="text-sm space-y-1 text-gray-600">
-              <div><strong className="text-gray-800">Admin:</strong> admin@admin.com / admin</div>
-              <div><strong className="text-gray-800">Médico:</strong> medico@medico.com / medico</div>
+              <div><strong className="text-gray-800">Admin:</strong> admin@medpay.com / admin123</div>
             </div>
           </div>
         </CardContent>
