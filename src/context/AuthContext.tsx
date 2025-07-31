@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -36,8 +37,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  // Helper para verificar se é admin
-  const isAdmin = profile?.role === 'admin';
+  // Helper para verificar se é admin - considerar tanto role quanto email específico
+  const isAdmin = profile?.role === 'admin' || user?.email === 'admin@medpay.com';
 
   const fetchProfile = async (userId: string) => {
     try {

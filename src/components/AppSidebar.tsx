@@ -44,7 +44,7 @@ export function AppSidebar() {
     { title: "Configurações", url: "/configuracoes", icon: Settings, roles: ['admin', 'usuario', 'medico'] },
   ];
 
-  // Para admin, mostrar todos os itens. Para outros usuários, filtrar por role
+  // Admin tem acesso a tudo, outros usuários filtrados por role
   const filteredItems = isAdmin ? menuItems : menuItems.filter(item => {
     if (!profile || !profile.role) {
       console.log('No profile or role available');
@@ -93,7 +93,7 @@ export function AppSidebar() {
                       }
                     >
                       <item.icon className="h-5 w-5 flex-shrink-0" />
-                      {!isCollapsed && <span className="font-medium">{item.title}</span>}
+                      {!isCollapsed && <span className="font-medium text-blue-800">{item.title}</span>}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
