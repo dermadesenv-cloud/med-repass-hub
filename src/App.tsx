@@ -10,6 +10,7 @@ import { Layout } from "./components/Layout";
 // Pages
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
+import Lancamentos from "./pages/Lancamentos";
 import Medicos from "./pages/Medicos";
 import Empresas from "./pages/Empresas";
 import Procedimentos from "./pages/Procedimentos";
@@ -86,6 +87,14 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <Dashboard />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/lancamentos" 
+        element={
+          <ProtectedRoute>
+            <Lancamentos />
           </ProtectedRoute>
         } 
       />

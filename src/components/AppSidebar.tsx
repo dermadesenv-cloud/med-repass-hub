@@ -78,7 +78,7 @@ export function AppSidebar() {
 
         <SidebarGroup className="px-2 py-4">
           <SidebarGroupLabel className="text-blue-800 font-semibold px-3 py-2 text-sm">
-            Menu Principal {isAdmin && "(Admin)"}
+            Menu Principal
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -95,7 +95,7 @@ export function AppSidebar() {
                         }`
                       }
                     >
-                      <item.icon className="h-5 w-5 flex-shrink-0" />
+                      <item.icon className={`h-5 w-5 flex-shrink-0 ${location.pathname === item.url ? 'text-white' : 'text-blue-800'}`} />
                       {!isCollapsed && (
                         <span className={`font-medium ${location.pathname === item.url ? 'text-white' : 'text-blue-800'}`}>
                           {item.title}
