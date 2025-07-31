@@ -27,24 +27,35 @@ import { useAuth } from '@/context/AuthContext';
 export function AppSidebar() {
   const { state } = useSidebar();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+
+  console.log('AppSidebar - user:', user?.email, 'profile:', profile);
 
   const menuItems = [
-    { title: "Dashboard", url: "/dashboard", icon: Home, roles: ['admin', 'user'] },
+    { title: "Dashboard", url: "/dashboard", icon: Home, roles: ['admin', 'usuario'] },
     { title: "Médicos", url: "/medicos", icon: Users, roles: ['admin'] },
     { title: "Empresas", url: "/empresas", icon: Building2, roles: ['admin'] },
-    { title: "Procedimentos", url: "/procedimentos", icon: FileText, roles: ['admin', 'user'] },
-    { title: "Relatórios", url: "/relatorios", icon: BarChart3, roles: ['admin', 'user'] },
+    { title: "Procedimentos", url: "/procedimentos", icon: FileText, roles: ['admin', 'usuario'] },
+    { title: "Relatórios", url: "/relatorios", icon: BarChart3, roles: ['admin', 'usuario'] },
     { title: "Pagamentos", url: "/pagamentos", icon: CreditCard, roles: ['admin'] },
     { title: "Usuários", url: "/usuarios", icon: UserCheck, roles: ['admin'] },
-    { title: "Configurações", url: "/configuracoes", icon: Settings, roles: ['admin', 'user'] },
+    { title: "Configurações", url: "/configuracoes", icon: Settings, roles: ['admin', 'usuario'] },
   ];
 
-  const filteredItems = menuItems.filter(item => 
-    user && item.roles.includes(user.role)
-  );
+  // Filtrar itens baseado no role do perfil
+  const filteredItems = menuItems.filter(item => {
+    if (!profile || !profile.role) {
+      console.log('No profile or role available');
+      return false;
+    }
+    const hasRole = item.roles.includes(profile.role);
+    console.log(`Menu item ${item.title} - required roles:`, item.roles, 'user role:', profile.role, 'has access:', hasRole);
+    return hasRole;
+  });
 
   const isCollapsed = state === "collapsed";
+
+  console.log('Filtered menu items:', filteredItems.length, 'Profile role:', profile?.role);
 
   return (
     <Sidebar className={isCollapsed ? "w-14" : "w-64"} collapsible="icon">
@@ -71,7 +82,7 @@ export function AppSidebar() {
                       className={({ isActive }) => 
                         `flex items-center gap-3 px-3 py-2.5 mx-2 rounded-lg transition-all duration-200 ${
                           isActive 
-                            ? 'bg-blue-600 text-blue-800 shadow-lg font-semibold' 
+                            ? 'bg-blue-600 text-white shadow-lg font-semibold' 
                             : 'text-blue-800 hover:bg-blue-100 hover:shadow-md'
                         }`
                       }
