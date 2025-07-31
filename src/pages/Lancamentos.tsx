@@ -1,363 +1,361 @@
+import React, { useState, useEffect } from 'react';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Trash2, Plus, Edit } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext";
 
-import React, { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, Search, Calendar, User, Building2 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Textarea } from '@/components/ui/textarea';
-
-interface Lancamento {
+interface Empresa {
   id: string;
-  data_lancamento: string;
-  medico_id: string;
-  empresa_id: string;
-  observacoes?: string;
-  valor_total: number;
-  created_at: string;
-  medicos: {
-    id: string;
-    nome: string;
-    crm: string;
-  };
-  empresas: {
-    id: string;
-    nome: string;
-  };
-  lancamento_itens: Array<{
-    id: string;
-    procedimento_id: string;
-    quantidade: number;
-    valor_unitario: number;
-    valor_total: number;
-    procedimentos: {
-      id: string;
-      nome: string;
-      codigo?: string;
-    };
-  }>;
+  nome: string;
+}
+
+interface Medico {
+  id: string;
+  nome: string;
+}
+
+interface Procedimento {
+  id: string;
+  nome: string;
+  valor: number;
 }
 
 interface LancamentoItem {
+  id?: string;
   procedimento_id: string;
   quantidade: number;
   valor_unitario: number;
   valor_total: number;
 }
 
+interface Lancamento {
+  id: string;
+  empresa_id: string;
+  medico_id: string;
+  paciente_nome: string;
+  data_procedimento: string;
+  observacoes?: string;
+  valor_total?: number;
+  status: 'pendente' | 'processado' | 'cancelado';
+  itens: LancamentoItem[];
+  empresas?: Empresa;
+  medicos?: Medico;
+}
+
+interface FormData {
+  empresa_id: string;
+  medico_id: string;
+  paciente_nome: string;
+  data_procedimento: string;
+  observacoes: string;
+  itens: LancamentoItem[];
+}
+
 const Lancamentos = () => {
-  const { profile, isAdmin } = useAuth();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
+  const [empresas, setEmpresas] = useState<Empresa[]>([]);
+  const [medicos, setMedicos] = useState<Medico[]>([]);
+  const [procedimentos, setProcedimentos] = useState<Procedimento[]>([]);
   const [editingLancamento, setEditingLancamento] = useState<Lancamento | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedEmpresa, setSelectedEmpresa] = useState<string>('todas');
-  const [selectedMedico, setSelectedMedico] = useState<string>('todos');
-  
-  const [formData, setFormData] = useState({
-    data_lancamento: new Date().toISOString().split('T')[0],
+  const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
+
+  const [formData, setFormData] = useState<FormData>({
+    empresa_id: '',
     medico_id: '',
-    empresa_id: profile?.empresa_id || '',
+    paciente_nome: '',
+    data_procedimento: new Date().toISOString().split('T')[0],
     observacoes: '',
-    itens: [] as LancamentoItem[]
+    itens: [{
+      procedimento_id: '',
+      quantidade: 1,
+      valor_unitario: 0,
+      valor_total: 0
+    }],
   });
 
-  // Buscar empresas
-  const { data: empresas = [] } = useQuery({
-    queryKey: ['empresas-ativas'],
-    queryFn: async () => {
-      let query = supabase
-        .from('empresas')
-        .select('id, nome')
-        .eq('status', 'ativa')
-        .order('nome');
+  useEffect(() => {
+    fetchLancamentos();
+    fetchEmpresas();
+    fetchMedicos();
+    fetchProcedimentos();
+  }, []);
 
-      if (!isAdmin && profile?.empresa_id) {
-        query = query.eq('id', profile.empresa_id);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return data;
-    }
-  });
-
-  // Buscar médicos
-  const { data: medicos = [] } = useQuery({
-    queryKey: ['medicos', formData.empresa_id],
-    queryFn: async () => {
-      if (!formData.empresa_id) return [];
-
-      const { data, error } = await supabase
-        .from('medicos')
-        .select('id, nome, crm')
-        .eq('empresa_id', formData.empresa_id)
-        .eq('status', 'ativa')
-        .order('nome');
-
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!formData.empresa_id
-  });
-
-  // Buscar procedimentos
-  const { data: procedimentos = [] } = useQuery({
-    queryKey: ['procedimentos-ativos', formData.empresa_id],
-    queryFn: async () => {
-      if (!formData.empresa_id) return [];
-
-      const { data, error } = await supabase
-        .from('procedimentos')
-        .select('id, nome, codigo, valor')
-        .eq('empresa_id', formData.empresa_id)
-        .eq('status', 'ativo')
-        .order('nome');
-
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!formData.empresa_id
-  });
-
-  // Buscar lançamentos
-  const { data: lancamentos = [], isLoading } = useQuery({
-    queryKey: ['lancamentos'],
-    queryFn: async () => {
+  const fetchLancamentos = async () => {
+    try {
       let query = supabase
         .from('lancamentos')
         .select(`
           *,
-          medicos (id, nome, crm),
-          empresas (id, nome),
-          lancamento_itens (
-            id,
-            procedimento_id,
-            quantidade,
-            valor_unitario,
-            valor_total,
-            procedimentos (id, nome, codigo)
-          )
+          empresas ( nome ),
+          medicos ( nome )
         `)
-        .order('data_lancamento', { ascending: false });
+        .order('data_procedimento', { ascending: false });
 
-      if (!isAdmin && profile?.empresa_id) {
-        query = query.eq('empresa_id', profile.empresa_id);
+      if (!isAdmin) {
+        query = query.eq('empresa_id', user?.empresa_id);
       }
 
       const { data, error } = await query;
+
       if (error) throw error;
-      return data as Lancamento[];
+
+      setLancamentos(data || []);
+    } catch (error: any) {
+      console.error('Error fetching lançamentos:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao carregar lançamentos.",
+        variant: "destructive"
+      });
     }
-  });
+  };
 
-  // Mutation para salvar lançamento
-  const lancamentoMutation = useMutation({
-    mutationFn: async (lancamentoData: typeof formData & { id?: string }) => {
-      const { itens, ...dadosLancamento } = lancamentoData;
-      
-      // Calcular valor total
-      const valor_total = itens.reduce((sum, item) => sum + item.valor_total, 0);
-      
-      const lancamentoToSave = {
-        ...dadosLancamento,
-        valor_total,
-        created_by: profile?.id,
-        observacoes: lancamentoData.observacoes || null
-      };
+  const fetchEmpresas = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('empresas')
+        .select('*')
+        .order('nome');
 
-      let lancamentoId: string;
+      if (error) throw error;
 
-      if (lancamentoData.id) {
+      setEmpresas(data || []);
+    } catch (error: any) {
+      console.error('Error fetching empresas:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao carregar empresas.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const fetchMedicos = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('medicos')
+        .select('*')
+        .order('nome');
+
+      if (error) throw error;
+
+      setMedicos(data || []);
+    } catch (error: any) {
+      console.error('Error fetching medicos:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao carregar médicos.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const fetchProcedimentos = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('procedimentos')
+        .select('*')
+        .order('nome');
+
+      if (error) throw error;
+
+      setProcedimentos(data || []);
+    } catch (error: any) {
+      console.error('Error fetching procedimentos:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao carregar procedimentos.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+
+    try {
+      const valorTotal = formData.itens.reduce((sum, item) => sum + item.valor_total, 0);
+
+      if (editingLancamento) {
         // Atualizar lançamento existente
         const { error } = await supabase
           .from('lancamentos')
-          .update(lancamentoToSave)
-          .eq('id', lancamentoData.id);
-        
+          .update({
+            empresa_id: formData.empresa_id,
+            medico_id: formData.medico_id,
+            paciente_nome: formData.paciente_nome,
+            data_procedimento: formData.data_procedimento,
+            observacoes: formData.observacoes,
+            valor_total: valorTotal
+          })
+          .eq('id', editingLancamento.id);
+
         if (error) throw error;
-        
-        // Deletar itens antigos
+
+        // Atualizar itens do lançamento (excluir os antigos e inserir os novos)
         await supabase
           .from('lancamento_itens')
           .delete()
-          .eq('lancamento_id', lancamentoData.id);
-        
-        lancamentoId = lancamentoData.id;
+          .eq('lancamento_id', editingLancamento.id);
+
+        const itensToInsert = formData.itens.map(item => ({
+          ...item,
+          lancamento_id: editingLancamento.id
+        }));
+
+        const { error: itemError } = await supabase
+          .from('lancamento_itens')
+          .insert(itensToInsert);
+
+        if (itemError) throw itemError;
+
+        toast({
+          title: "Lançamento atualizado",
+          description: "Os dados do lançamento foram atualizados com sucesso.",
+        });
       } else {
         // Criar novo lançamento
         const { data, error } = await supabase
           .from('lancamentos')
-          .insert([lancamentoToSave])
+          .insert([{
+            empresa_id: formData.empresa_id,
+            medico_id: formData.medico_id,
+            paciente_nome: formData.paciente_nome,
+            data_procedimento: formData.data_procedimento,
+            observacoes: formData.observacoes,
+            valor_total: valorTotal,
+            status: 'pendente'
+          }])
           .select()
-          .single();
-        
-        if (error) throw error;
-        lancamentoId = data.id;
-      }
 
-      // Inserir itens
-      if (itens.length > 0) {
-        const itensToInsert = itens.map(item => ({
-          lancamento_id: lancamentoId,
-          ...item
+        if (error) throw error;
+
+        const newLancamento = data && data[0];
+
+        // Criar itens do lançamento
+        const itensToInsert = formData.itens.map(item => ({
+          ...item,
+          lancamento_id: newLancamento.id
         }));
 
-        const { error } = await supabase
+        const { error: itemError } = await supabase
           .from('lancamento_itens')
           .insert(itensToInsert);
-        
-        if (error) throw error;
+
+        if (itemError) throw itemError;
+
+        toast({
+          title: "Lançamento cadastrado",
+          description: "Novo lançamento foi cadastrado com sucesso.",
+        });
       }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['lancamentos'] });
-      toast({
-        title: editingLancamento ? "Lançamento atualizado!" : "Lançamento cadastrado!",
-        description: editingLancamento 
-          ? "O lançamento foi atualizado com sucesso."
-          : "Novo lançamento foi registrado no sistema.",
-      });
-      handleCloseDialog();
-    },
-    onError: (error) => {
-      console.error('Error saving lançamento:', error);
+
+      fetchLancamentos();
+      setIsDialogOpen(false);
+    } catch (error: any) {
+      console.error('Error saving lancamento:', error);
       toast({
         title: "Erro",
-        description: "Erro ao salvar lançamento. Tente novamente.",
+        description: error.message || "Erro ao salvar lançamento.",
         variant: "destructive"
       });
+    } finally {
+      setIsLoading(false);
     }
-  });
+  };
 
-  // Mutation para deletar lançamento
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
+  const addItem = () => {
+    setFormData({
+      ...formData,
+      itens: [...formData.itens, {
+        procedimento_id: '',
+        quantidade: 1,
+        valor_unitario: 0,
+        valor_total: 0
+      }]
+    });
+  };
+
+  const removeItem = (index: number) => {
+    const newItems = [...formData.itens];
+    newItems.splice(index, 1);
+    setFormData({ ...formData, itens: newItems });
+  };
+
+  const updateItem = (index: number, field: string, value: any) => {
+    const newItems = [...formData.itens];
+    
+    if (field === 'procedimento_id') {
+      const selectedProcedimento = procedimentos.find(p => p.id === value);
+      newItems[index] = {
+        ...newItems[index],
+        procedimento_id: value,
+        valor_unitario: selectedProcedimento?.valor || 0,
+        valor_total: newItems[index].quantidade * (selectedProcedimento?.valor || 0)
+      };
+    } else if (field === 'quantidade') {
+      const quantidade = parseInt(value, 10) || 1;
+      newItems[index] = {
+        ...newItems[index],
+        quantidade: quantidade,
+        valor_total: quantidade * newItems[index].valor_unitario
+      };
+    } else if (field === 'valor_unitario') {
+      const valorUnitario = parseFloat(value) || 0;
+      newItems[index] = {
+        ...newItems[index],
+        valor_unitario: valorUnitario,
+        valor_total: newItems[index].quantidade * valorUnitario
+      };
+    }
+
+    setFormData({ ...formData, itens: newItems });
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
       const { error } = await supabase
         .from('lancamentos')
         .delete()
         .eq('id', id);
+
       if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['lancamentos'] });
+
       toast({
-        title: "Lançamento removido!",
-        description: "O lançamento foi removido do sistema.",
+        title: "Lançamento excluído",
+        description: "Lançamento foi excluído com sucesso.",
       });
-    },
-    onError: (error) => {
-      console.error('Error deleting lançamento:', error);
+
+      fetchLancamentos();
+    } catch (error: any) {
+      console.error('Error deleting lancamento:', error);
       toast({
         title: "Erro",
-        description: "Erro ao remover lançamento.",
+        description: error.message || "Erro ao excluir lançamento.",
         variant: "destructive"
       });
     }
-  });
-
-  const filteredLancamentos = lancamentos.filter(lancamento => {
-    const matchesSearch = searchTerm === '' || 
-      lancamento.medicos?.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      lancamento.empresas?.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      lancamento.observacoes?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesEmpresa = selectedEmpresa === 'todas' || lancamento.empresa_id === selectedEmpresa;
-    const matchesMedico = selectedMedico === 'todos' || lancamento.medico_id === selectedMedico;
-    
-    return matchesSearch && matchesEmpresa && matchesMedico;
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (formData.itens.length === 0) {
-      toast({
-        title: "Erro",
-        description: "Adicione pelo menos um procedimento ao lançamento.",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    const lancamentoData = {
-      ...formData,
-      ...(editingLancamento && { id: editingLancamento.id })
-    };
-    
-    lancamentoMutation.mutate(lancamentoData);
   };
-
-  const handleCloseDialog = () => {
-    setIsDialogOpen(false);
-    setEditingLancamento(null);
-    setFormData({
-      data_lancamento: new Date().toISOString().split('T')[0],
-      medico_id: '',
-      empresa_id: profile?.empresa_id || '',
-      observacoes: '',
-      itens: []
-    });
-  };
-
-  const adicionarItem = () => {
-    setFormData({
-      ...formData,
-      itens: [...formData.itens, { procedimento_id: '', quantidade: 1, valor_unitario: 0, valor_total: 0 }]
-    });
-  };
-
-  const removerItem = (index: number) => {
-    setFormData({
-      ...formData,
-      itens: formData.itens.filter((_, i) => i !== index)
-    });
-  };
-
-  const atualizarItem = (index: number, campo: keyof LancamentoItem, valor: any) => {
-    const novosItens = [...formData.itens];
-    novosItens[index] = { ...novosItens[index], [campo]: valor };
-    
-    // Recalcular valor total do item
-    if (campo === 'quantidade' || campo === 'valor_unitario') {
-      novosItens[index].valor_total = novosItens[index].quantidade * novosItens[index].valor_unitario;
-    }
-    
-    // Se mudou o procedimento, buscar o valor
-    if (campo === 'procedimento_id') {
-      const procedimento = procedimentos.find(p => p.id === valor);
-      if (procedimento) {
-        novosItens[index].valor_unitario = procedimento.valor;
-        novosItens[index].valor_total = novosItens[index].quantidade * procedimento.valor;
-      }
-    }
-    
-    setFormData({ ...formData, itens: novosItens });
-  };
-
-  const valorTotalLancamento = formData.itens.reduce((sum, item) => sum + item.valor_total, 0);
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">Lançamentos</h1>
-          <p className="text-muted-foreground">Registre os procedimentos realizados</p>
-        </div>
-        
+        <h1 className="text-3xl font-bold tracking-tight">Lançamentos</h1>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={handleCloseDialog}>
+            <Button onClick={() => setEditingLancamento(null)}>
               <Plus className="mr-2 h-4 w-4" />
               Novo Lançamento
             </Button>
@@ -368,284 +366,231 @@ const Lancamentos = () => {
                 {editingLancamento ? 'Editar Lançamento' : 'Novo Lançamento'}
               </DialogTitle>
               <DialogDescription>
-                Registre os procedimentos realizados
+                {editingLancamento 
+                  ? 'Atualize as informações do lançamento.' 
+                  : 'Preencha os dados para cadastrar um novo lançamento.'
+                }
               </DialogDescription>
             </DialogHeader>
-            
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="data_lancamento">Data do Lançamento</Label>
-                  <Input
-                    id="data_lancamento"
-                    type="date"
-                    value={formData.data_lancamento}
-                    onChange={(e) => setFormData({ ...formData, data_lancamento: e.target.value })}
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="empresa">Empresa</Label>
+                  <Label htmlFor="empresa_id">Empresa</Label>
                   <Select 
                     value={formData.empresa_id} 
-                    onValueChange={(value) => setFormData({ ...formData, empresa_id: value, medico_id: '' })}
+                    onValueChange={(value) => setFormData({...formData, empresa_id: value})}
+                    disabled={!isAdmin}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione uma empresa" />
                     </SelectTrigger>
                     <SelectContent>
-                      {empresas.map(empresa => (
-                        <SelectItem key={empresa.id} value={empresa.id}>{empresa.nome}</SelectItem>
+                      {empresas.map((empresa) => (
+                        <SelectItem key={empresa.id} value={empresa.id}>
+                          {empresa.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="medico_id">Médico</Label>
+                  <Select 
+                    value={formData.medico_id} 
+                    onValueChange={(value) => setFormData({...formData, medico_id: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um médico" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {medicos.map((medico) => (
+                        <SelectItem key={medico.id} value={medico.id}>
+                          {medico.nome}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="medico">Médico</Label>
-                <Select 
-                  value={formData.medico_id} 
-                  onValueChange={(value) => setFormData({ ...formData, medico_id: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione um médico" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {medicos.map(medico => (
-                      <SelectItem key={medico.id} value={medico.id}>
-                        {medico.nome} - CRM: {medico.crm}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="paciente_nome">Nome do Paciente</Label>
+                  <Input
+                    id="paciente_nome"
+                    value={formData.paciente_nome}
+                    onChange={(e) => setFormData({...formData, paciente_nome: e.target.value})}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="data_procedimento">Data do Procedimento</Label>
+                  <Input
+                    id="data_procedimento"
+                    type="date"
+                    value={formData.data_procedimento}
+                    onChange={(e) => setFormData({...formData, data_procedimento: e.target.value})}
+                    required
+                  />
+                </div>
               </div>
 
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
                   <Label>Procedimentos</Label>
-                  <Button type="button" onClick={adicionarItem} size="sm">
-                    <Plus className="h-4 w-4 mr-1" />
-                    Adicionar Item
+                  <Button type="button" onClick={addItem} size="sm">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Adicionar Procedimento
                   </Button>
                 </div>
-
+                
                 {formData.itens.map((item, index) => (
-                  <div key={index} className="border rounded-lg p-4 space-y-2">
-                    <div className="grid grid-cols-4 gap-2">
-                      <div className="col-span-2">
-                        <Label>Procedimento</Label>
-                        <Select 
-                          value={item.procedimento_id}
-                          onValueChange={(value) => atualizarItem(index, 'procedimento_id', value)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {procedimentos.map(proc => (
-                              <SelectItem key={proc.id} value={proc.id}>
-                                {proc.nome} {proc.codigo && `(${proc.codigo})`}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      
-                      <div>
-                        <Label>Quantidade</Label>
-                        <Input
-                          type="number"
-                          min="1"
-                          value={item.quantidade}
-                          onChange={(e) => atualizarItem(index, 'quantidade', parseInt(e.target.value) || 1)}
-                        />
-                      </div>
-                      
-                      <div className="flex items-end">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => removerItem(index)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                  <div key={index} className="grid grid-cols-12 gap-2 items-end p-4 border rounded">
+                    <div className="col-span-5">
+                      <Label>Procedimento</Label>
+                      <Select 
+                        value={item.procedimento_id} 
+                        onValueChange={(value) => updateItem(index, 'procedimento_id', value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione um procedimento" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {procedimentos.map((proc) => (
+                            <SelectItem key={proc.id} value={proc.id}>
+                              {proc.nome} - R$ {proc.valor.toFixed(2)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
-                    
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <Label>Valor Unitário</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={item.valor_unitario}
-                          onChange={(e) => atualizarItem(index, 'valor_unitario', parseFloat(e.target.value) || 0)}
-                        />
-                      </div>
-                      
-                      <div>
-                        <Label>Valor Total</Label>
-                        <Input
-                          type="text"
-                          value={`R$ ${item.valor_total.toFixed(2)}`}
-                          disabled
-                        />
-                      </div>
+                    <div className="col-span-2">
+                      <Label>Quantidade</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={item.quantidade}
+                        onChange={(e) => updateItem(index, 'quantidade', parseInt(e.target.value) || 1)}
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <Label>Valor Unit.</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={item.valor_unitario}
+                        onChange={(e) => updateItem(index, 'valor_unitario', parseFloat(e.target.value) || 0)}
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <Label>Total</Label>
+                      <Input
+                        type="text"
+                        value={`R$ ${item.valor_total.toFixed(2)}`}
+                        disabled
+                      />
+                    </div>
+                    <div className="col-span-1">
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => removeItem(index)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
                 ))}
 
-                {formData.itens.length > 0 && (
-                  <div className="text-right">
-                    <strong>Total do Lançamento: R$ {valorTotalLancamento.toFixed(2)}</strong>
-                  </div>
-                )}
+                <div className="text-right">
+                  <Label className="text-lg font-semibold">
+                    Total Geral: R$ {formData.itens.reduce((sum, item) => sum + item.valor_total, 0).toFixed(2)}
+                  </Label>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="observacoes">Observações</Label>
-                <Textarea
-                  id="observacoes"
-                  value={formData.observacoes}
-                  onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
-                  rows={3}
-                />
-              </div>
-              
-              <div className="flex justify-end space-x-2 pt-4">
-                <Button type="button" variant="outline" onClick={handleCloseDialog}>
-                  Cancelar
+              <DialogFooter>
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading ? 'Salvando...' : (editingLancamento ? 'Atualizar' : 'Cadastrar')}
                 </Button>
-                <Button type="submit" disabled={lancamentoMutation.isPending}>
-                  {lancamentoMutation.isPending ? 'Salvando...' : (editingLancamento ? 'Atualizar' : 'Salvar')}
-                </Button>
-              </div>
+              </DialogFooter>
             </form>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Filtros */}
       <Card>
         <CardHeader>
-          <CardTitle>Filtros</CardTitle>
+          <CardTitle>Lançamentos Cadastrados</CardTitle>
+          <CardDescription>
+            Lista de todos os lançamentos de procedimentos
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-4 flex-wrap">
-            <div className="flex-1 min-w-[200px]">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar por médico, empresa ou observações..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            
-            {isAdmin && (
-              <div className="w-48">
-                <Select value={selectedEmpresa} onValueChange={setSelectedEmpresa}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Todas as empresas" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todas">Todas as empresas</SelectItem>
-                    {empresas.map(empresa => (
-                      <SelectItem key={empresa.id} value={empresa.id}>{empresa.nome}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Lista de Lançamentos */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
-            Lançamentos Registrados ({filteredLancamentos.length})
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
+          <div className="rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Data</TableHead>
+                  <TableHead>Paciente</TableHead>
+                  <TableHead>Empresa</TableHead>
                   <TableHead>Médico</TableHead>
-                  {isAdmin && <TableHead>Empresa</TableHead>}
-                  <TableHead>Procedimentos</TableHead>
                   <TableHead>Valor Total</TableHead>
-                  <TableHead>Ações</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={isAdmin ? 6 : 5} className="text-center">
-                      Carregando lançamentos...
+                {lancamentos.map((lancamento) => (
+                  <TableRow key={lancamento.id}>
+                    <TableCell>
+                      {new Date(lancamento.data_procedimento).toLocaleDateString('pt-BR')}
+                    </TableCell>
+                    <TableCell>{lancamento.paciente_nome}</TableCell>
+                    <TableCell>{lancamento.empresas?.nome}</TableCell>
+                    <TableCell>{lancamento.medicos?.nome}</TableCell>
+                    <TableCell>R$ {lancamento.valor_total?.toFixed(2) || '0.00'}</TableCell>
+                    <TableCell>
+                      <span className={`px-2 py-1 rounded text-xs ${
+                        lancamento.status === 'pendente' ? 'bg-yellow-100 text-yellow-800' :
+                        lancamento.status === 'processado' ? 'bg-green-100 text-green-800' :
+                        'bg-red-100 text-red-800'
+                      }`}>
+                        {lancamento.status}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setEditingLancamento(lancamento);
+                            setFormData({
+                              empresa_id: lancamento.empresa_id,
+                              medico_id: lancamento.medico_id,
+                              paciente_nome: lancamento.paciente_nome,
+                              data_procedimento: lancamento.data_procedimento,
+                              observacoes: lancamento.observacoes || '',
+                              itens: []
+                            });
+                            setIsDialogOpen(true);
+                          }}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDelete(lancamento.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
-                ) : filteredLancamentos.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={isAdmin ? 6 : 5} className="text-center">
-                      Nenhum lançamento encontrado.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredLancamentos.map((lancamento) => (
-                    <TableRow key={lancamento.id}>
-                      <TableCell>
-                        {new Date(lancamento.data_lancamento).toLocaleDateString('pt-BR')}
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <div className="font-medium">{lancamento.medicos?.nome}</div>
-                          <div className="text-sm text-muted-foreground">
-                            CRM: {lancamento.medicos?.crm}
-                          </div>
-                        </div>
-                      </TableCell>
-                      {isAdmin && (
-                        <TableCell>{lancamento.empresas?.nome}</TableCell>
-                      )}
-                      <TableCell>
-                        <div className="space-y-1">
-                          {lancamento.lancamento_itens?.map(item => (
-                            <div key={item.id} className="text-sm">
-                              {item.procedimentos?.nome} 
-                              {item.procedimentos?.codigo && ` (${item.procedimentos.codigo})`}
-                              <span className="text-muted-foreground"> - Qtd: {item.quantidade}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-semibold text-green-600">
-                        R$ {lancamento.valor_total.toFixed(2)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDelete(lancamento.id)}
-                            disabled={deleteMutation.isPending}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
+                ))}
               </TableBody>
             </Table>
           </div>
