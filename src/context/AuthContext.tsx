@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -21,6 +20,7 @@ interface AuthContextType {
   profile: Profile | null;
   session: Session | null;
   loading: boolean;
+  isAdmin: boolean;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signUp: (email: string, password: string, nome: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
@@ -36,6 +36,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
+  // Helper para verificar se é admin
+  const isAdmin = profile?.role === 'admin';
+
   const fetchProfile = async (userId: string) => {
     try {
       console.log('Fetching profile for user:', userId);
@@ -49,29 +52,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('Error fetching profile:', error);
         if (error.code === 'PGRST116') {
           console.log('Profile not found for user:', userId);
-          // Para o usuário admin, vamos tentar criar o perfil se não existir
-          if (user?.email === 'admin@medpay.com') {
-            console.log('Creating admin profile automatically...');
-            const { error: createError } = await supabase
-              .from('profiles')
-              .insert({
-                user_id: userId,
-                nome: 'Administrador',
-                email: 'admin@medpay.com',
-                role: 'admin'
-              });
-            
-            if (createError) {
-              console.error('Error creating admin profile:', createError);
-            } else {
-              // Tentar buscar o perfil novamente
-              setTimeout(() => fetchProfile(userId), 500);
-              return;
-            }
-          }
+          setProfile(null);
+          return;
         }
-        setProfile(null);
-        return;
       }
 
       console.log('Profile loaded successfully:', data);
@@ -97,7 +80,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         if (session?.user) {
           console.log('User authenticated, fetching profile...');
-          // Usar setTimeout para evitar problemas de recursão
           setTimeout(() => {
             if (mounted) {
               fetchProfile(session.user.id);
@@ -284,6 +266,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     profile,
     session,
     loading,
+    isAdmin,
     signIn,
     signUp,
     signOut,

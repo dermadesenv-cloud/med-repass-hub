@@ -27,27 +27,34 @@ import { useAuth } from '@/context/AuthContext';
 export function AppSidebar() {
   const { state } = useSidebar();
   const location = useLocation();
-  const { user, profile } = useAuth();
+  const { user, profile, isAdmin } = useAuth();
 
-  console.log('AppSidebar - user:', user?.email, 'profile:', profile);
+  console.log('AppSidebar - user:', user?.email, 'profile:', profile, 'isAdmin:', isAdmin);
 
   const menuItems = [
-    { title: "Dashboard", url: "/dashboard", icon: Home, roles: ['admin', 'usuario'] },
+    { title: "Dashboard", url: "/dashboard", icon: Home, roles: ['admin', 'usuario', 'medico'] },
     { title: "Médicos", url: "/medicos", icon: Users, roles: ['admin'] },
     { title: "Empresas", url: "/empresas", icon: Building2, roles: ['admin'] },
-    { title: "Procedimentos", url: "/procedimentos", icon: FileText, roles: ['admin', 'usuario'] },
-    { title: "Relatórios", url: "/relatorios", icon: BarChart3, roles: ['admin', 'usuario'] },
+    { title: "Procedimentos", url: "/procedimentos", icon: FileText, roles: ['admin', 'usuario', 'medico'] },
+    { title: "Relatórios", url: "/relatorios", icon: BarChart3, roles: ['admin', 'usuario', 'medico'] },
     { title: "Pagamentos", url: "/pagamentos", icon: CreditCard, roles: ['admin'] },
     { title: "Usuários", url: "/usuarios", icon: UserCheck, roles: ['admin'] },
-    { title: "Configurações", url: "/configuracoes", icon: Settings, roles: ['admin', 'usuario'] },
+    { title: "Configurações", url: "/configuracoes", icon: Settings, roles: ['admin', 'usuario', 'medico'] },
   ];
 
-  // Filtrar itens baseado no role do perfil
+  // Admin vê tudo, outros usuários veem apenas os itens permitidos
   const filteredItems = menuItems.filter(item => {
     if (!profile || !profile.role) {
       console.log('No profile or role available');
       return false;
     }
+
+    // Admin sempre tem acesso a tudo
+    if (isAdmin) {
+      console.log(`Admin access granted for ${item.title}`);
+      return true;
+    }
+
     const hasRole = item.roles.includes(profile.role);
     console.log(`Menu item ${item.title} - required roles:`, item.roles, 'user role:', profile.role, 'has access:', hasRole);
     return hasRole;
@@ -55,7 +62,7 @@ export function AppSidebar() {
 
   const isCollapsed = state === "collapsed";
 
-  console.log('Filtered menu items:', filteredItems.length, 'Profile role:', profile?.role);
+  console.log('Filtered menu items:', filteredItems.length, 'Profile role:', profile?.role, 'Is Admin:', isAdmin);
 
   return (
     <Sidebar className={isCollapsed ? "w-14" : "w-64"} collapsible="icon">
@@ -71,7 +78,9 @@ export function AppSidebar() {
         </div>
 
         <SidebarGroup className="px-2 py-4">
-          <SidebarGroupLabel className="text-blue-800 font-semibold px-3 py-2 text-sm">Menu Principal</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-blue-800 font-semibold px-3 py-2 text-sm">
+            Menu Principal {isAdmin && "(Admin)"}
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {filteredItems.map((item) => (
