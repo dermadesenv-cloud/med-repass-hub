@@ -1,45 +1,19 @@
-
-import { useState, useEffect } from 'react';
-import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { toast } from 'sonner';
-import { Plus, Edit, Trash2, Eye } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Plus, Edit, Trash2, Calendar, DollarSign, FileText, User, Building } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
-
-// Updated type definitions to match the actual database structure and query results
-interface Lancamento {
-  id: string;
-  empresa_id: string;
-  medico_id: string;
-  data_lancamento: string;
-  observacoes?: string;
-  valor_total: number;
-  created_at: string;
-  updated_at: string;
-  created_by: string;
-  empresas: { nome: string; } | null;
-  medicos: { nome: string; crm: string; } | null;
-  itens?: LancamentoItem[];
-}
-
-interface LancamentoItem {
-  id: string;
-  lancamento_id: string;
-  procedimento_id: string;
-  quantidade: number;
-  valor_unitario: number;
-  valor_total: number;
-  procedimentos?: { nome: string; };
-}
+import { useToast } from '@/hooks/use-toast';
+import { format } from 'date-fns';
 
 interface Empresa {
   id: string;
@@ -58,376 +32,418 @@ interface Procedimento {
   valor: number;
 }
 
-interface FormData {
-  empresa_id: string;
-  medico_id: string;
-  data_lancamento: string;
-  observacoes: string;
-  itens: Array<{
-    procedimento_id: string;
-    quantidade: number;
-    valor_unitario: number;
-    valor_total: number;
-  }>;
+interface LancamentoItem {
+  id?: string;
+  lancamento_id?: string;
+  procedimento_id: string;
+  quantidade: number;
+  valor_unitario: number;
+  valor_total: number;
 }
 
-export default function Lancamentos() {
-  const { user, userProfile } = useAuth();
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [selectedLancamento, setSelectedLancamento] = useState<Lancamento | null>(null);
-  const [isViewMode, setIsViewMode] = useState(false);
-  const [formData, setFormData] = useState<FormData>({
-    empresa_id: '',
-    medico_id: '',
-    data_lancamento: '',
-    observacoes: '',
-    itens: []
-  });
-  const queryClient = useQueryClient();
+interface Lancamento {
+  id: string;
+  medico_id: string;
+  empresa_id: string;
+  data_lancamento: string;
+  valor_total: number;
+  observacoes: string;
+  created_at: string;
+  updated_at: string;
+  created_by: string;
+  empresas: { nome: string } | { nome: string }[];
+  medicos: { nome: string; crm: string } | { nome: string; crm: string }[];
+  itens?: LancamentoItem[];
+}
 
-  // Fetch lancamentos with proper type handling
-  const { data: lancamentos = [], isLoading } = useQuery({
-    queryKey: ['lancamentos'],
-    queryFn: async () => {
+const Lancamentos = () => {
+  const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
+  const [empresas, setEmpresas] = useState<Empresa[]>([]);
+  const [medicos, setMedicos] = useState<Medico[]>([]);
+  const [procedimentos, setProcedimentos] = useState<Procedimento[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editingLancamento, setEditingLancamento] = useState<Lancamento | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  
+  const { user, profile, isAdmin } = useAuth();
+  const { toast } = useToast();
+  
+  const [formData, setFormData] = useState({
+    medico_id: '',
+    empresa_id: '',
+    data_lancamento: new Date().toISOString().split('T')[0],
+    observacoes: ''
+  });
+
+  const [itensLancamento, setItensLancamento] = useState<LancamentoItem[]>([{
+    procedimento_id: '',
+    quantidade: 1,
+    valor_unitario: 0,
+    valor_total: 0
+  }]);
+
+  // Fix the empresa_id access - use profile instead of userProfile
+  const userEmpresaId = isAdmin ? null : profile?.empresa_id;
+
+  useEffect(() => {
+    fetchLancamentos();
+    fetchEmpresas();
+    fetchMedicos();
+    fetchProcedimentos();
+  }, []);
+
+  const fetchLancamentos = async () => {
+    try {
+      setLoading(true);
       let query = supabase
         .from('lancamentos')
         .select(`
           *,
           empresas!inner(nome),
           medicos!inner(nome, crm)
-        `)
-        .order('data_lancamento', { ascending: false });
+        `);
 
-      if (userProfile?.role !== 'admin') {
-        query = query.eq('empresa_id', userProfile?.empresa_id);
+      // Se não for admin, filtrar por empresa
+      if (!isAdmin && userEmpresaId) {
+        query = query.eq('empresa_id', userEmpresaId);
       }
 
-      const { data, error } = await query;
+      const { data, error } = await query.order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao buscar lançamentos:', error);
+        toast({
+          title: "Erro ao carregar lançamentos",
+          description: error.message,
+          variant: "destructive"
+        });
+        return;
+      }
 
-      // Transform the data to match our type expectations
-      return (data || []).map(item => ({
+      // Transform the data to match our interface
+      const transformedData = data.map(item => ({
         ...item,
         empresas: Array.isArray(item.empresas) ? item.empresas[0] : item.empresas,
         medicos: Array.isArray(item.medicos) ? item.medicos[0] : item.medicos
-      })) as Lancamento[];
-    },
-  });
+      }));
 
-  // Fetch empresas
-  const { data: empresas = [] } = useQuery({
-    queryKey: ['empresas'],
-    queryFn: async () => {
-      let query = supabase.from('empresas').select('id, nome').eq('status', 'ativa');
-      
-      if (userProfile?.role !== 'admin') {
-        query = query.eq('id', userProfile?.empresa_id);
+      setLancamentos(transformedData);
+    } catch (error) {
+      console.error('Erro ao buscar lançamentos:', error);
+      toast({
+        title: "Erro inesperado",
+        description: "Erro ao carregar lançamentos",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchEmpresas = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('empresas')
+        .select('*')
+        .order('nome');
+
+      if (error) {
+        console.error('Erro ao buscar empresas:', error);
+        return;
       }
 
-      const { data, error } = await query;
-      if (error) throw error;
-      return data as Empresa[];
-    },
-  });
+      setEmpresas(data || []);
+    } catch (error) {
+      console.error('Erro ao buscar empresas:', error);
+    }
+  };
 
-  // Fetch medicos
-  const { data: medicos = [] } = useQuery({
-    queryKey: ['medicos', formData.empresa_id],
-    queryFn: async () => {
-      if (!formData.empresa_id) return [];
-      
-      const { data, error } = await supabase
+  const fetchMedicos = async () => {
+    try {
+      let query = supabase
         .from('medicos')
-        .select('id, nome, crm')
-        .eq('empresa_id', formData.empresa_id)
-        .eq('status', 'ativa');
+        .select('*');
 
-      if (error) throw error;
-      return data as Medico[];
-    },
-    enabled: !!formData.empresa_id,
-  });
+      if (!isAdmin && userEmpresaId) {
+        query = query.eq('empresa_id', userEmpresaId);
+      }
 
-  // Fetch procedimentos
-  const { data: procedimentos = [] } = useQuery({
-    queryKey: ['procedimentos', formData.empresa_id],
-    queryFn: async () => {
-      if (!formData.empresa_id) return [];
-      
+      const { data, error } = await query.order('nome');
+
+      if (error) {
+        console.error('Erro ao buscar médicos:', error);
+        return;
+      }
+
+      setMedicos(data || []);
+    } catch (error) {
+      console.error('Erro ao buscar médicos:', error);
+    }
+  };
+
+  const fetchProcedimentos = async () => {
+    try {
       const { data, error } = await supabase
         .from('procedimentos')
-        .select('id, nome, valor')
-        .eq('empresa_id', formData.empresa_id)
-        .eq('status', 'ativo');
+        .select('*')
+        .order('nome');
 
-      if (error) throw error;
-      return data as Procedimento[];
-    },
-    enabled: !!formData.empresa_id,
-  });
+      if (error) {
+        console.error('Erro ao buscar procedimentos:', error);
+        return;
+      }
 
-  // Set default empresa for regular users
-  useEffect(() => {
-    if (userProfile?.role !== 'admin' && userProfile?.empresa_id && !formData.empresa_id) {
-      setFormData(prev => ({ ...prev, empresa_id: userProfile.empresa_id }));
+      setProcedimentos(data || []);
+    } catch (error) {
+      console.error('Erro ao buscar procedimentos:', error);
     }
-  }, [userProfile, formData.empresa_id]);
+  };
 
-  // Create mutation
-  const createMutation = useMutation({
-    mutationFn: async (data: FormData) => {
-      if (!user) throw new Error('User not authenticated');
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!user) {
+      toast({
+        title: "Erro de autenticação",
+        description: "Usuário não autenticado",
+        variant: "destructive"
+      });
+      return;
+    }
 
-      // Insert lancamento
-      const { data: lancamento, error: lancamentoError } = await supabase
-        .from('lancamentos')
-        .insert({
-          empresa_id: data.empresa_id,
-          medico_id: data.medico_id,
-          data_lancamento: data.data_lancamento,
-          observacoes: data.observacoes,
-          valor_total: data.itens.reduce((total, item) => total + item.valor_total, 0),
-          created_by: user.id
-        })
-        .select()
-        .single();
+    try {
+      const valorTotal = itensLancamento.reduce((sum, item) => sum + item.valor_total, 0);
+      
+      const lancamentoData = {
+        ...formData,
+        valor_total: valorTotal,
+        created_by: user.id
+      };
 
-      if (lancamentoError) throw lancamentoError;
+      if (editingLancamento) {
+        // Atualizar lançamento existente
+        const { error: lancamentoError } = await supabase
+          .from('lancamentos')
+          .update(lancamentoData)
+          .eq('id', editingLancamento.id);
 
-      // Insert itens
-      if (data.itens.length > 0) {
+        if (lancamentoError) {
+          throw lancamentoError;
+        }
+
+        // Deletar itens antigos
+        const { error: deleteError } = await supabase
+          .from('lancamento_itens')
+          .delete()
+          .eq('lancamento_id', editingLancamento.id);
+
+        if (deleteError) {
+          throw deleteError;
+        }
+
+        // Inserir novos itens
+        const itensData = itensLancamento.map(item => ({
+          ...item,
+          lancamento_id: editingLancamento.id
+        }));
+
         const { error: itensError } = await supabase
           .from('lancamento_itens')
-          .insert(data.itens.map(item => ({
-            ...item,
-            lancamento_id: lancamento.id
-          })));
+          .insert(itensData);
 
-        if (itensError) throw itensError;
-      }
+        if (itensError) {
+          throw itensError;
+        }
 
-      return lancamento;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['lancamentos'] });
-      setIsDialogOpen(false);
-      resetForm();
-      toast.success('Lançamento criado com sucesso!');
-    },
-    onError: (error) => {
-      console.error('Error creating lancamento:', error);
-      toast.error('Erro ao criar lançamento');
-    },
-  });
+        toast({
+          title: "Lançamento atualizado",
+          description: "Lançamento atualizado com sucesso!"
+        });
+      } else {
+        // Criar novo lançamento
+        const { data: lancamentoResult, error: lancamentoError } = await supabase
+          .from('lancamentos')
+          .insert([lancamentoData])
+          .select()
+          .single();
 
-  // Update mutation
-  const updateMutation = useMutation({
-    mutationFn: async (data: FormData & { id: string }) => {
-      // Update lancamento
-      const { error: lancamentoError } = await supabase
-        .from('lancamentos')
-        .update({
-          empresa_id: data.empresa_id,
-          medico_id: data.medico_id,
-          data_lancamento: data.data_lancamento,
-          observacoes: data.observacoes,
-          valor_total: data.itens.reduce((total, item) => total + item.valor_total, 0)
-        })
-        .eq('id', data.id);
+        if (lancamentoError) {
+          throw lancamentoError;
+        }
 
-      if (lancamentoError) throw lancamentoError;
+        // Inserir itens
+        const itensData = itensLancamento.map(item => ({
+          ...item,
+          lancamento_id: lancamentoResult.id
+        }));
 
-      // Delete existing itens
-      const { error: deleteError } = await supabase
-        .from('lancamento_itens')
-        .delete()
-        .eq('lancamento_id', data.id);
-
-      if (deleteError) throw deleteError;
-
-      // Insert new itens
-      if (data.itens.length > 0) {
         const { error: itensError } = await supabase
           .from('lancamento_itens')
-          .insert(data.itens.map(item => ({
-            ...item,
-            lancamento_id: data.id
-          })));
+          .insert(itensData);
 
-        if (itensError) throw itensError;
+        if (itensError) {
+          throw itensError;
+        }
+
+        toast({
+          title: "Lançamento criado",
+          description: "Lançamento criado com sucesso!"
+        });
       }
 
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['lancamentos'] });
+      // Reset form
+      setFormData({
+        medico_id: '',
+        empresa_id: '',
+        data_lancamento: new Date().toISOString().split('T')[0],
+        observacoes: ''
+      });
+      setItensLancamento([{
+        procedimento_id: '',
+        quantidade: 1,
+        valor_unitario: 0,
+        valor_total: 0
+      }]);
+      setEditingLancamento(null);
       setIsDialogOpen(false);
-      resetForm();
-      toast.success('Lançamento atualizado com sucesso!');
-    },
-    onError: (error) => {
-      console.error('Error updating lancamento:', error);
-      toast.error('Erro ao atualizar lançamento');
-    },
-  });
+      
+      await fetchLancamentos();
+    } catch (error) {
+      console.error('Erro ao salvar lançamento:', error);
+      toast({
+        title: "Erro ao salvar",
+        description: "Erro ao salvar lançamento",
+        variant: "destructive"
+      });
+    }
+  };
 
-  // Delete mutation
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
+  const handleEdit = (lancamento: Lancamento) => {
+    setEditingLancamento(lancamento);
+    setFormData({
+      medico_id: lancamento.medico_id,
+      empresa_id: lancamento.empresa_id,
+      data_lancamento: lancamento.data_lancamento,
+      observacoes: lancamento.observacoes
+    });
+    
+    // Load existing items if available
+    if (lancamento.itens && lancamento.itens.length > 0) {
+      setItensLancamento(lancamento.itens);
+    }
+    
+    setIsDialogOpen(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
       const { error } = await supabase
         .from('lancamentos')
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['lancamentos'] });
-      toast.success('Lançamento excluído com sucesso!');
-    },
-    onError: (error) => {
-      console.error('Error deleting lancamento:', error);
-      toast.error('Erro ao excluir lançamento');
-    },
-  });
+      if (error) {
+        throw error;
+      }
 
-  const resetForm = () => {
-    setFormData({
-      empresa_id: userProfile?.role !== 'admin' ? userProfile?.empresa_id || '' : '',
-      medico_id: '',
-      data_lancamento: '',
-      observacoes: '',
-      itens: []
-    });
-    setSelectedLancamento(null);
-    setIsViewMode(false);
-  };
-
-  const openDialog = (lancamento?: Lancamento, viewMode = false) => {
-    if (lancamento) {
-      setSelectedLancamento(lancamento);
-      setFormData({
-        empresa_id: lancamento.empresa_id,
-        medico_id: lancamento.medico_id,
-        data_lancamento: lancamento.data_lancamento,
-        observacoes: lancamento.observacoes || '',
-        itens: lancamento.itens || []
+      toast({
+        title: "Lançamento excluído",
+        description: "Lançamento excluído com sucesso!"
       });
-      setIsViewMode(viewMode);
-    } else {
-      resetForm();
-      setIsViewMode(false);
-    }
-    setIsDialogOpen(true);
-  };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (formData.itens.length === 0) {
-      toast.error('Adicione pelo menos um item ao lançamento');
-      return;
-    }
-
-    if (selectedLancamento) {
-      updateMutation.mutate({ ...formData, id: selectedLancamento.id });
-    } else {
-      createMutation.mutate(formData);
-    }
-  };
-
-  const handleDelete = (lancamento: Lancamento) => {
-    if (confirm('Tem certeza que deseja excluir este lançamento?')) {
-      deleteMutation.mutate(lancamento.id);
+      await fetchLancamentos();
+    } catch (error) {
+      console.error('Erro ao excluir lançamento:', error);
+      toast({
+        title: "Erro ao excluir",
+        description: "Erro ao excluir lançamento",
+        variant: "destructive"
+      });
     }
   };
 
   const addItem = () => {
-    setFormData(prev => ({
-      ...prev,
-      itens: [...prev.itens, {
-        procedimento_id: '',
-        quantidade: 1,
-        valor_unitario: 0,
-        valor_total: 0
-      }]
-    }));
+    setItensLancamento([...itensLancamento, {
+      procedimento_id: '',
+      quantidade: 1,
+      valor_unitario: 0,
+      valor_total: 0
+    }]);
   };
 
   const removeItem = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      itens: prev.itens.filter((_, i) => i !== index)
-    }));
+    if (itensLancamento.length > 1) {
+      setItensLancamento(itensLancamento.filter((_, i) => i !== index));
+    }
   };
 
-  const updateItem = (index: number, field: string, value: any) => {
-    setFormData(prev => {
-      const newItens = [...prev.itens];
-      const item = { ...newItens[index] };
-      
-      if (field === 'procedimento_id') {
-        const procedimento = procedimentos.find(p => p.id === value);
-        if (procedimento) {
-          item.procedimento_id = value;
-          item.valor_unitario = procedimento.valor;
-          item.valor_total = item.quantidade * procedimento.valor;
-        }
-      } else if (field === 'quantidade') {
-        item.quantidade = parseInt(value) || 1;
-        item.valor_total = item.quantidade * item.valor_unitario;
-      } else {
-        (item as any)[field] = value;
-      }
-      
-      newItens[index] = item;
-      return { ...prev, itens: newItens };
-    });
+  const updateItem = (index: number, field: keyof LancamentoItem, value: string | number) => {
+    const newItens = [...itensLancamento];
+    newItens[index] = { ...newItens[index], [field]: value };
+    
+    if (field === 'quantidade' || field === 'valor_unitario') {
+      newItens[index].valor_total = newItens[index].quantidade * newItens[index].valor_unitario;
+    }
+    
+    setItensLancamento(newItens);
   };
 
-  const totalGeral = formData.itens.reduce((total, item) => total + item.valor_total, 0);
-
-  if (isLoading) {
+  if (loading) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="flex items-center justify-center h-32">
-          <div className="text-lg">Carregando...</div>
-        </div>
+      <div className="flex items-center justify-center h-64">
+        <div className="text-lg">Carregando lançamentos...</div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Lançamentos</h1>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={() => openDialog()}>
-              <Plus className="w-4 h-4 mr-2" />
+            <Button onClick={() => setEditingLancamento(null)}>
+              <Plus className="mr-2 h-4 w-4" />
               Novo Lançamento
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-4xl">
             <DialogHeader>
               <DialogTitle>
-                {isViewMode ? 'Visualizar' : selectedLancamento ? 'Editar' : 'Novo'} Lançamento
+                {editingLancamento ? 'Editar Lançamento' : 'Novo Lançamento'}
               </DialogTitle>
             </DialogHeader>
             
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {userProfile?.role === 'admin' && (
-                  <div>
+                <div className="space-y-2">
+                  <Label htmlFor="medico_id">Médico</Label>
+                  <Select 
+                    value={formData.medico_id} 
+                    onValueChange={(value) => setFormData({ ...formData, medico_id: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um médico" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {medicos.map((medico) => (
+                        <SelectItem key={medico.id} value={medico.id}>
+                          {medico.nome} - CRM: {medico.crm}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {isAdmin && (
+                  <div className="space-y-2">
                     <Label htmlFor="empresa_id">Empresa</Label>
-                    <Select
-                      value={formData.empresa_id}
-                      onValueChange={(value) => setFormData(prev => ({ ...prev, empresa_id: value, medico_id: '' }))}
-                      disabled={isViewMode}
+                    <Select 
+                      value={formData.empresa_id} 
+                      onValueChange={(value) => setFormData({ ...formData, empresa_id: value })}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecione a empresa" />
+                        <SelectValue placeholder="Selecione uma empresa" />
                       </SelectTrigger>
                       <SelectContent>
                         {empresas.map((empresa) => (
@@ -440,74 +456,39 @@ export default function Lancamentos() {
                   </div>
                 )}
 
-                <div>
-                  <Label htmlFor="medico_id">Médico</Label>
-                  <Select
-                    value={formData.medico_id}
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, medico_id: value }))}
-                    disabled={isViewMode || !formData.empresa_id}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o médico" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {medicos.map((medico) => (
-                        <SelectItem key={medico.id} value={medico.id}>
-                          {medico.nome} - CRM: {medico.crm}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
+                <div className="space-y-2">
                   <Label htmlFor="data_lancamento">Data do Lançamento</Label>
                   <Input
                     id="data_lancamento"
                     type="date"
                     value={formData.data_lancamento}
-                    onChange={(e) => setFormData(prev => ({ ...prev, data_lancamento: e.target.value }))}
-                    disabled={isViewMode}
+                    onChange={(e) => setFormData({ ...formData, data_lancamento: e.target.value })}
                     required
                   />
                 </div>
               </div>
 
-              <div>
-                <Label htmlFor="observacoes">Observações</Label>
-                <Textarea
-                  id="observacoes"
-                  value={formData.observacoes}
-                  onChange={(e) => setFormData(prev => ({ ...prev, observacoes: e.target.value }))}
-                  disabled={isViewMode}
-                  rows={3}
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <Label>Procedimentos</Label>
-                  {!isViewMode && (
-                    <Button type="button" onClick={addItem} size="sm">
-                      <Plus className="w-4 h-4 mr-2" />
-                      Adicionar Item
-                    </Button>
-                  )}
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-semibold">Itens do Lançamento</h3>
+                  <Button type="button" onClick={addItem} size="sm">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Adicionar Item
+                  </Button>
                 </div>
 
-                {formData.itens.map((item, index) => (
-                  <Card key={index} className="mb-4">
-                    <CardContent className="pt-4">
-                      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
-                        <div className="md:col-span-2">
+                {itensLancamento.map((item, index) => (
+                  <Card key={index}>
+                    <CardContent className="p-4">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="space-y-2">
                           <Label>Procedimento</Label>
-                          <Select
-                            value={item.procedimento_id}
+                          <Select 
+                            value={item.procedimento_id} 
                             onValueChange={(value) => updateItem(index, 'procedimento_id', value)}
-                            disabled={isViewMode}
                           >
                             <SelectTrigger>
-                              <SelectValue placeholder="Selecione o procedimento" />
+                              <SelectValue placeholder="Selecione" />
                             </SelectTrigger>
                             <SelectContent>
                               {procedimentos.map((proc) => (
@@ -519,76 +500,76 @@ export default function Lancamentos() {
                           </Select>
                         </div>
 
-                        <div>
+                        <div className="space-y-2">
                           <Label>Quantidade</Label>
                           <Input
                             type="number"
                             min="1"
                             value={item.quantidade}
-                            onChange={(e) => updateItem(index, 'quantidade', e.target.value)}
-                            disabled={isViewMode}
+                            onChange={(e) => updateItem(index, 'quantidade', parseInt(e.target.value) || 1)}
                           />
                         </div>
 
-                        <div>
-                          <Label>Valor Unit.</Label>
+                        <div className="space-y-2">
+                          <Label>Valor Unitário</Label>
                           <Input
                             type="number"
                             step="0.01"
+                            min="0"
                             value={item.valor_unitario}
-                            disabled
+                            onChange={(e) => updateItem(index, 'valor_unitario', parseFloat(e.target.value) || 0)}
                           />
                         </div>
 
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1">
-                            <Label>Total</Label>
+                        <div className="space-y-2">
+                          <Label>Total</Label>
+                          <div className="flex items-center gap-2">
                             <Input
-                              type="number"
-                              step="0.01"
-                              value={item.valor_total.toFixed(2)}
+                              type="text"
+                              value={`R$ ${item.valor_total.toFixed(2)}`}
                               disabled
                             />
+                            {itensLancamento.length > 1 && (
+                              <Button 
+                                type="button" 
+                                variant="destructive" 
+                                size="sm"
+                                onClick={() => removeItem(index)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
-                          {!isViewMode && (
-                            <Button
-                              type="button"
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => removeItem(index)}
-                              className="mt-6"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          )}
                         </div>
                       </div>
                     </CardContent>
                   </Card>
                 ))}
-
-                {formData.itens.length > 0 && (
-                  <div className="text-right">
-                    <div className="text-lg font-bold">
-                      Total Geral: R$ {totalGeral.toFixed(2)}
-                    </div>
-                  </div>
-                )}
               </div>
 
-              {!isViewMode && (
-                <div className="flex justify-end gap-2">
+              <div className="space-y-2">
+                <Label htmlFor="observacoes">Observações</Label>
+                <Textarea
+                  id="observacoes"
+                  placeholder="Observações adicionais..."
+                  value={formData.observacoes}
+                  onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
+                />
+              </div>
+
+              <div className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
+                <span className="text-lg font-semibold">
+                  Valor Total: R$ {itensLancamento.reduce((sum, item) => sum + item.valor_total, 0).toFixed(2)}
+                </span>
+                <div className="space-x-2">
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancelar
                   </Button>
-                  <Button 
-                    type="submit" 
-                    disabled={createMutation.isPending || updateMutation.isPending}
-                  >
-                    {selectedLancamento ? 'Atualizar' : 'Criar'}
+                  <Button type="submit">
+                    {editingLancamento ? 'Atualizar' : 'Criar'} Lançamento
                   </Button>
                 </div>
-              )}
+              </div>
             </form>
           </DialogContent>
         </Dialog>
@@ -596,72 +577,100 @@ export default function Lancamentos() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Lista de Lançamentos</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            Lista de Lançamentos
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Data</TableHead>
-                {userProfile?.role === 'admin' && <TableHead>Empresa</TableHead>}
                 <TableHead>Médico</TableHead>
+                <TableHead>Empresa</TableHead>
                 <TableHead>Valor Total</TableHead>
                 <TableHead>Observações</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
+                <TableHead>Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {lancamentos.map((lancamento) => (
                 <TableRow key={lancamento.id}>
                   <TableCell>
-                    {new Date(lancamento.data_lancamento).toLocaleDateString('pt-BR')}
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-gray-500" />
+                      {format(new Date(lancamento.data_lancamento), 'dd/MM/yyyy')}
+                    </div>
                   </TableCell>
-                  {userProfile?.role === 'admin' && (
-                    <TableCell>
-                      <Badge variant="secondary">
-                        {lancamento.empresas?.nome || 'N/A'}
-                      </Badge>
-                    </TableCell>
-                  )}
                   <TableCell>
-                    {lancamento.medicos?.nome || 'N/A'}
-                    {lancamento.medicos?.crm && (
-                      <div className="text-sm text-muted-foreground">
-                        CRM: {lancamento.medicos.crm}
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4 text-gray-500" />
+                      <div>
+                        <div className="font-medium">
+                          {typeof lancamento.medicos === 'object' && !Array.isArray(lancamento.medicos) 
+                            ? lancamento.medicos.nome 
+                            : 'Nome não disponível'}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          CRM: {typeof lancamento.medicos === 'object' && !Array.isArray(lancamento.medicos) 
+                            ? lancamento.medicos.crm 
+                            : 'CRM não disponível'}
+                        </div>
                       </div>
-                    )}
+                    </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline">
-                      R$ {lancamento.valor_total.toFixed(2)}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Building className="h-4 w-4 text-gray-500" />
+                      {typeof lancamento.empresas === 'object' && !Array.isArray(lancamento.empresas) 
+                        ? lancamento.empresas.nome 
+                        : 'Empresa não disponível'}
+                    </div>
                   </TableCell>
-                  <TableCell className="max-w-xs truncate">
-                    {lancamento.observacoes || '-'}
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="h-4 w-4 text-green-600" />
+                      <Badge variant="outline" className="text-green-700 border-green-200">
+                        R$ {lancamento.valor_total.toFixed(2)}
+                      </Badge>
+                    </div>
                   </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
+                  <TableCell>
+                    <div className="max-w-xs truncate">
+                      {lancamento.observacoes || '-'}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
-                        onClick={() => openDialog(lancamento, true)}
+                        onClick={() => handleEdit(lancamento)}
                       >
-                        <Eye className="w-4 h-4" />
+                        <Edit className="h-4 w-4" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openDialog(lancamento, false)}
-                      >
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(lancamento)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="destructive" size="sm">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Tem certeza que deseja excluir este lançamento? Esta ação não pode ser desfeita.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDelete(lancamento.id)}>
+                              Excluir
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -672,4 +681,6 @@ export default function Lancamentos() {
       </Card>
     </div>
   );
-}
+};
+
+export default Lancamentos;
