@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -24,7 +25,6 @@ interface AuthContextType {
   signUp: (email: string, password: string, nome: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   updateProfile: (data: Partial<Profile>) => Promise<{ error: any }>;
-  createAdminUser: () => Promise<{ error: any }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -48,7 +48,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) {
         console.error('Error fetching profile:', error);
         if (error.code === 'PGRST116') {
-          console.log('Profile not found, user may need to complete signup');
+          console.log('Profile not found for user:', userId);
+          // Para o usuário admin, vamos tentar criar o perfil se não existir
+          if (user?.email === 'admin@medpay.com') {
+            console.log('Creating admin profile automatically...');
+            const { error: createError } = await supabase
+              .from('profiles')
+              .insert({
+                user_id: userId,
+                nome: 'Administrador',
+                email: 'admin@medpay.com',
+                role: 'admin'
+              });
+            
+            if (createError) {
+              console.error('Error creating admin profile:', createError);
+            } else {
+              // Tentar buscar o perfil novamente
+              setTimeout(() => fetchProfile(userId), 500);
+              return;
+            }
+          }
         }
         setProfile(null);
         return;
@@ -57,55 +77,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('Profile loaded successfully:', data);
       setProfile(data);
     } catch (error) {
-      console.error('Error in fetchProfile:', error);
+      console.error('Exception in fetchProfile:', error);
       setProfile(null);
-    }
-  };
-
-  const createAdminUser = async () => {
-    try {
-      console.log('Creating admin user...');
-      
-      // First try to sign up the admin user
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email: 'admin@medpay.com',
-        password: 'admin123',
-        options: {
-          data: {
-            nome: 'Administrador'
-          }
-        }
-      });
-
-      if (signUpError && !signUpError.message.includes('User already registered')) {
-        console.error('Error creating admin user:', signUpError);
-        return { error: signUpError };
-      }
-
-      console.log('Admin user creation response:', signUpData);
-
-      // If user was created or already exists, try to create/update profile
-      if (signUpData.user) {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .upsert({
-            user_id: signUpData.user.id,
-            nome: 'Administrador',
-            email: 'admin@medpay.com',
-            role: 'admin'
-          });
-
-        if (profileError) {
-          console.error('Error creating admin profile:', profileError);
-          return { error: profileError };
-        }
-      }
-
-      console.log('Admin user and profile created successfully');
-      return { error: null };
-    } catch (error) {
-      console.error('Exception in createAdminUser:', error);
-      return { error };
     }
   };
 
@@ -114,7 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let mounted = true;
     
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
         if (!mounted) return;
         
         console.log('Auth state changed:', event, 'User:', session?.user?.email || 'No user');
@@ -124,6 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         if (session?.user) {
           console.log('User authenticated, fetching profile...');
+          // Usar setTimeout para evitar problemas de recursão
           setTimeout(() => {
             if (mounted) {
               fetchProfile(session.user.id);
@@ -138,6 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
+    // Verificar sessão existente
     supabase.auth.getSession().then(({ data: { session }, error }) => {
       if (!mounted) return;
       
@@ -174,12 +149,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('Attempting sign in for:', email);
       setLoading(true);
       
-      // If it's the admin trying to login and it fails, try to create the admin user first
-      if (email.toLowerCase() === 'admin@medpay.com') {
-        console.log('Admin login detected, ensuring admin user exists...');
-        await createAdminUser();
-      }
-      
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim().toLowerCase(),
         password,
@@ -192,29 +161,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         let errorDescription = "Verifique suas credenciais e tente novamente.";
         
         if (error.message.includes('Invalid login credentials')) {
-          if (email.toLowerCase() === 'admin@medpay.com') {
-            errorDescription = "Usuário admin não encontrado. Tentando criar...";
-            // Try to create admin user and retry login
-            const createResult = await createAdminUser();
-            if (!createResult.error) {
-              // Retry login after creating admin user
-              console.log('Retrying admin login after user creation...');
-              const { data: retryData, error: retryError } = await supabase.auth.signInWithPassword({
-                email: email.trim().toLowerCase(),
-                password,
-              });
-              
-              if (!retryError) {
-                console.log('Admin login successful after user creation');
-                toast({
-                  title: "Login realizado com sucesso!",
-                  description: "Bem-vindo, Administrador!",
-                });
-                setLoading(false);
-                return { error: null };
-              }
-            }
-          }
           errorDescription = "Email ou senha incorretos.";
         } else if (error.message.includes('Email not confirmed')) {
           errorDescription = "Por favor, confirme seu email antes de fazer login.";
@@ -342,7 +288,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signUp,
     signOut,
     updateProfile,
-    createAdminUser,
   };
 
   return (
