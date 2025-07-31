@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,45 +7,29 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Search, Edit2, Trash2, Building2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/context/AuthContext';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 interface Empresa {
   id: string;
   nome: string;
   cnpj: string;
   email: string;
-  telefone: string;
-  endereco: string;
+  telefone?: string;
+  endereco?: string;
   status: 'ativa' | 'inativa';
-  createdAt: string;
+  created_at: string;
+  updated_at: string;
 }
 
 const Empresas = () => {
   const { toast } = useToast();
-  const [empresas, setEmpresas] = useState<Empresa[]>([
-    {
-      id: '1',
-      nome: 'Hospital São Pedro',
-      cnpj: '12.345.678/0001-90',
-      email: 'contato@hospitalsaopedro.com.br',
-      telefone: '(11) 3456-7890',
-      endereco: 'Rua das Flores, 123 - São Paulo/SP',
-      status: 'ativa',
-      createdAt: '2024-01-15'
-    },
-    {
-      id: '2',
-      nome: 'Clínica Vida',
-      cnpj: '98.765.432/0001-10',
-      email: 'admin@clinicavida.com.br',
-      telefone: '(11) 9876-5432',
-      endereco: 'Av. Paulista, 456 - São Paulo/SP',
-      status: 'ativa',
-      createdAt: '2024-02-20'
-    }
-  ]);
-
+  const { isAdmin } = useAuth();
+  const queryClient = useQueryClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingEmpresa, setEditingEmpresa] = useState<Empresa | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -57,6 +42,85 @@ const Empresas = () => {
     status: 'ativa' as 'ativa' | 'inativa'
   });
 
+  // Buscar empresas
+  const { data: empresas = [], isLoading } = useQuery({
+    queryKey: ['empresas'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('empresas')
+        .select('*')
+        .order('nome');
+
+      if (error) {
+        console.error('Error fetching empresas:', error);
+        throw error;
+      }
+      return data as Empresa[];
+    }
+  });
+
+  // Mutation para criar/atualizar empresa
+  const empresaMutation = useMutation({
+    mutationFn: async (empresaData: typeof formData & { id?: string }) => {
+      if (empresaData.id) {
+        const { error } = await supabase
+          .from('empresas')
+          .update(empresaData)
+          .eq('id', empresaData.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('empresas')
+          .insert([empresaData]);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['empresas'] });
+      toast({
+        title: editingEmpresa ? "Empresa atualizada" : "Empresa cadastrada",
+        description: editingEmpresa 
+          ? "Os dados da empresa foram atualizados com sucesso." 
+          : "Nova empresa foi cadastrada com sucesso.",
+      });
+      handleCloseDialog();
+    },
+    onError: (error) => {
+      console.error('Error saving empresa:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao salvar empresa. Tente novamente.",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Mutation para deletar empresa
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('empresas')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['empresas'] });
+      toast({
+        title: "Empresa removida",
+        description: "A empresa foi removida com sucesso.",
+      });
+    },
+    onError: (error) => {
+      console.error('Error deleting empresa:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao remover empresa. Verifique se não existem dados vinculados.",
+        variant: "destructive"
+      });
+    }
+  });
+
   const filteredEmpresas = empresas.filter(empresa =>
     empresa.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
     empresa.cnpj.includes(searchTerm) ||
@@ -66,39 +130,12 @@ const Empresas = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (editingEmpresa) {
-      setEmpresas(empresas.map(empresa => 
-        empresa.id === editingEmpresa.id 
-          ? { ...empresa, ...formData }
-          : empresa
-      ));
-      toast({
-        title: "Empresa atualizada",
-        description: "Os dados da empresa foram atualizados com sucesso.",
-      });
-    } else {
-      const newEmpresa: Empresa = {
-        id: Date.now().toString(),
-        ...formData,
-        createdAt: new Date().toISOString().split('T')[0]
-      };
-      setEmpresas([...empresas, newEmpresa]);
-      toast({
-        title: "Empresa cadastrada",
-        description: "Nova empresa foi cadastrada com sucesso.",
-      });
-    }
-
-    setFormData({
-      nome: '',
-      cnpj: '',
-      email: '',
-      telefone: '',
-      endereco: '',
-      status: 'ativa'
-    });
-    setEditingEmpresa(null);
-    setIsDialogOpen(false);
+    const empresaData = {
+      ...formData,
+      ...(editingEmpresa && { id: editingEmpresa.id })
+    };
+    
+    empresaMutation.mutate(empresaData);
   };
 
   const handleEdit = (empresa: Empresa) => {
@@ -107,21 +144,39 @@ const Empresas = () => {
       nome: empresa.nome,
       cnpj: empresa.cnpj,
       email: empresa.email,
-      telefone: empresa.telefone,
-      endereco: empresa.endereco,
+      telefone: empresa.telefone || '',
+      endereco: empresa.endereco || '',
       status: empresa.status
     });
     setIsDialogOpen(true);
   };
 
   const handleDelete = (id: string) => {
-    setEmpresas(empresas.filter(empresa => empresa.id !== id));
-    toast({
-      title: "Empresa removida",
-      description: "A empresa foi removida com sucesso.",
-      variant: "destructive"
+    if (confirm('Tem certeza que deseja remover esta empresa?')) {
+      deleteMutation.mutate(id);
+    }
+  };
+
+  const handleCloseDialog = () => {
+    setIsDialogOpen(false);
+    setEditingEmpresa(null);
+    setFormData({
+      nome: '',
+      cnpj: '',
+      email: '',
+      telefone: '',
+      endereco: '',
+      status: 'ativa'
     });
   };
+
+  if (!isAdmin) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Acesso restrito para administradores.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -134,17 +189,7 @@ const Empresas = () => {
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={() => {
-              setEditingEmpresa(null);
-              setFormData({
-                nome: '',
-                cnpj: '',
-                email: '',
-                telefone: '',
-                endereco: '',
-                status: 'ativa'
-              });
-            }}>
+            <Button onClick={handleCloseDialog}>
               <Plus className="mr-2 h-4 w-4" />
               Nova Empresa
             </Button>
@@ -198,7 +243,6 @@ const Empresas = () => {
                   value={formData.telefone}
                   onChange={(e) => setFormData({...formData, telefone: e.target.value})}
                   placeholder="(00) 00000-0000"
-                  required
                 />
               </div>
               <div className="space-y-2">
@@ -207,12 +251,26 @@ const Empresas = () => {
                   id="endereco"
                   value={formData.endereco}
                   onChange={(e) => setFormData({...formData, endereco: e.target.value})}
-                  required
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="status">Status</Label>
+                <Select value={formData.status} onValueChange={(value: 'ativa' | 'inativa') => setFormData({...formData, status: value})}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ativa">Ativa</SelectItem>
+                    <SelectItem value="inativa">Inativa</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <DialogFooter>
-                <Button type="submit">
-                  {editingEmpresa ? 'Atualizar' : 'Cadastrar'}
+                <Button type="button" variant="outline" onClick={handleCloseDialog}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={empresaMutation.isPending}>
+                  {empresaMutation.isPending ? 'Salvando...' : (editingEmpresa ? 'Atualizar' : 'Cadastrar')}
                 </Button>
               </DialogFooter>
             </form>
@@ -227,7 +285,7 @@ const Empresas = () => {
             Lista de Empresas
           </CardTitle>
           <CardDescription>
-            Total de {empresas.length} empresas cadastradas
+            {isLoading ? 'Carregando...' : `Total de ${empresas.length} empresas cadastradas`}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -254,37 +312,52 @@ const Empresas = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredEmpresas.map((empresa) => (
-                  <TableRow key={empresa.id}>
-                    <TableCell className="font-medium">{empresa.nome}</TableCell>
-                    <TableCell>{empresa.cnpj}</TableCell>
-                    <TableCell>{empresa.email}</TableCell>
-                    <TableCell>{empresa.telefone}</TableCell>
-                    <TableCell>
-                      <Badge variant={empresa.status === 'ativa' ? 'default' : 'secondary'}>
-                        {empresa.status === 'ativa' ? 'Ativa' : 'Inativa'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end space-x-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEdit(empresa)}
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDelete(empresa.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center">
+                      Carregando empresas...
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : filteredEmpresas.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center">
+                      Nenhuma empresa encontrada.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredEmpresas.map((empresa) => (
+                    <TableRow key={empresa.id}>
+                      <TableCell className="font-medium">{empresa.nome}</TableCell>
+                      <TableCell>{empresa.cnpj}</TableCell>
+                      <TableCell>{empresa.email}</TableCell>
+                      <TableCell>{empresa.telefone || '-'}</TableCell>
+                      <TableCell>
+                        <Badge variant={empresa.status === 'ativa' ? 'default' : 'secondary'}>
+                          {empresa.status === 'ativa' ? 'Ativa' : 'Inativa'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEdit(empresa)}
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDelete(empresa.id)}
+                            disabled={deleteMutation.isPending}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>
