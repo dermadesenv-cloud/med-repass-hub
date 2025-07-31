@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -37,8 +36,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  // Helper para verificar se é admin - considerar tanto role quanto email específico
+  // Helper para verificar se é admin - usar email específico como fallback
   const isAdmin = profile?.role === 'admin' || user?.email === 'admin@medpay.com';
+
+  console.log('AuthContext - isAdmin calculation:', {
+    userEmail: user?.email,
+    profileRole: profile?.role,
+    isAdmin: isAdmin
+  });
 
   const fetchProfile = async (userId: string) => {
     try {
@@ -53,13 +58,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('Error fetching profile:', error);
         if (error.code === 'PGRST116') {
           console.log('Profile not found for user:', userId);
-          setProfile(null);
+          // Se o usuário é admin@medpay.com mas não tem perfil, criar um perfil admin
+          if (user?.email === 'admin@medpay.com') {
+            console.log('Creating admin profile for admin@medpay.com');
+            const { data: newProfile, error: createError } = await supabase
+              .from('profiles')
+              .insert({
+                user_id: userId,
+                nome: 'Administrador',
+                email: user.email,
+                role: 'admin'
+              })
+              .select()
+              .single();
+            
+            if (createError) {
+              console.error('Error creating admin profile:', createError);
+              setProfile(null);
+            } else {
+              console.log('Admin profile created successfully:', newProfile);
+              setProfile(newProfile);
+            }
+          } else {
+            setProfile(null);
+          }
           return;
         }
+      } else {
+        console.log('Profile loaded successfully:', data);
+        setProfile(data);
       }
-
-      console.log('Profile loaded successfully:', data);
-      setProfile(data);
     } catch (error) {
       console.error('Exception in fetchProfile:', error);
       setProfile(null);

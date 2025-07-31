@@ -44,21 +44,24 @@ export function AppSidebar() {
     { title: "Configurações", url: "/configuracoes", icon: Settings, roles: ['admin', 'usuario', 'medico'] },
   ];
 
-  // Admin tem acesso a tudo, outros usuários filtrados por role
-  const filteredItems = isAdmin ? menuItems : menuItems.filter(item => {
-    if (!profile || !profile.role) {
-      console.log('No profile or role available');
-      return false;
-    }
-
-    const hasRole = item.roles.includes(profile.role);
-    console.log(`Menu item ${item.title} - required roles:`, item.roles, 'user role:', profile.role, 'has access:', hasRole);
-    return hasRole;
-  });
+  // Se é admin, mostrar TODOS os itens sem filtrar
+  // Se não é admin, filtrar pelos roles do perfil
+  const filteredItems = isAdmin 
+    ? menuItems 
+    : menuItems.filter(item => {
+        if (!profile?.role) {
+          console.log('No profile role available, showing no items');
+          return false;
+        }
+        const hasAccess = item.roles.includes(profile.role);
+        console.log(`Item ${item.title} - roles: [${item.roles.join(', ')}], user role: ${profile.role}, access: ${hasAccess}`);
+        return hasAccess;
+      });
 
   const isCollapsed = state === "collapsed";
 
-  console.log('Filtered menu items:', filteredItems.length, 'Profile role:', profile?.role, 'Is Admin:', isAdmin);
+  console.log(`Menu filtering - isAdmin: ${isAdmin}, profile role: ${profile?.role}, filtered items: ${filteredItems.length}/${menuItems.length}`);
+  console.log('Visible menu items:', filteredItems.map(item => item.title));
 
   return (
     <Sidebar className={isCollapsed ? "w-14" : "w-64"} collapsible="icon">
@@ -93,7 +96,11 @@ export function AppSidebar() {
                       }
                     >
                       <item.icon className="h-5 w-5 flex-shrink-0" />
-                      {!isCollapsed && <span className="font-medium text-blue-800">{item.title}</span>}
+                      {!isCollapsed && (
+                        <span className={`font-medium ${location.pathname === item.url ? 'text-white' : 'text-blue-800'}`}>
+                          {item.title}
+                        </span>
+                      )}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
