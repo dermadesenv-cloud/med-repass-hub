@@ -9,7 +9,8 @@ import {
   BarChart3, 
   Settings, 
   CreditCard,
-  UserCheck
+  UserCheck,
+  ClipboardList
 } from 'lucide-react';
 import {
   Sidebar,
@@ -33,6 +34,7 @@ export function AppSidebar() {
 
   const menuItems = [
     { title: "Dashboard", url: "/dashboard", icon: Home, roles: ['admin', 'usuario', 'medico'] },
+    { title: "Lançamentos", url: "/lancamentos", icon: ClipboardList, roles: ['admin', 'usuario', 'medico'] },
     { title: "Médicos", url: "/medicos", icon: Users, roles: ['admin'] },
     { title: "Empresas", url: "/empresas", icon: Building2, roles: ['admin'] },
     { title: "Procedimentos", url: "/procedimentos", icon: FileText, roles: ['admin', 'usuario', 'medico'] },
@@ -42,17 +44,11 @@ export function AppSidebar() {
     { title: "Configurações", url: "/configuracoes", icon: Settings, roles: ['admin', 'usuario', 'medico'] },
   ];
 
-  // Admin vê tudo, outros usuários veem apenas os itens permitidos
-  const filteredItems = menuItems.filter(item => {
+  // Para admin, mostrar todos os itens. Para outros usuários, filtrar por role
+  const filteredItems = isAdmin ? menuItems : menuItems.filter(item => {
     if (!profile || !profile.role) {
       console.log('No profile or role available');
       return false;
-    }
-
-    // Admin sempre tem acesso a tudo
-    if (isAdmin) {
-      console.log(`Admin access granted for ${item.title}`);
-      return true;
     }
 
     const hasRole = item.roles.includes(profile.role);
