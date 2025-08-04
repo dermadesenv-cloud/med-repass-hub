@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,51 +10,31 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Plus, Edit, Trash2, Search, UserPlus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 interface Medico {
   id: string;
   nome: string;
-  email: string;
+  email: string | null;
   crm: string;
-  especialidade: string;
-  empresaId: string;
-  empresaNome: string;
-  status: 'ativo' | 'inativo';
-  telefone: string;
-  token?: string;
-  isPaid?: boolean;
+  especialidade: string | null;
+  empresa_id: string | null;
+  status: 'ativa' | 'inativa';
+  telefone: string | null;
+  created_at: string;
+  updated_at: string;
+  empresas?: {
+    nome: string;
+  };
+}
+
+interface Empresa {
+  id: string;
+  nome: string;
 }
 
 const Medicos = () => {
-  const [medicos, setMedicos] = useState<Medico[]>([
-    {
-      id: '1',
-      nome: 'Dr. João Silva',
-      email: 'joao@clinica.com',
-      crm: '12345-SP',
-      especialidade: 'Cardiologia',
-      empresaId: '1',
-      empresaNome: 'Clínica São Paulo',
-      status: 'ativo',
-      telefone: '(11) 99999-9999',
-      token: 'TOKEN123',
-      isPaid: true
-    },
-    {
-      id: '2',
-      nome: 'Dra. Maria Santos',
-      email: 'maria@clinica.com',
-      crm: '67890-RJ',
-      especialidade: 'Dermatologia',
-      empresaId: '2',
-      empresaNome: 'Hospital Central',
-      status: 'ativo',
-      telefone: '(21) 88888-8888',
-      token: 'TOKEN456',
-      isPaid: false
-    }
-  ]);
-
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingMedico, setEditingMedico] = useState<Medico | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -63,62 +43,154 @@ const Medicos = () => {
     email: '',
     crm: '',
     especialidade: '',
-    empresaId: '',
-    telefone: '',
-    token: '',
-    isPaid: true
+    empresa_id: '',
+    telefone: ''
   });
 
   const { toast } = useToast();
-
-  const empresas = [
-    { id: '1', nome: 'Clínica São Paulo' },
-    { id: '2', nome: 'Hospital Central' },
-    { id: '3', nome: 'Clínica Nova Esperança' }
-  ];
+  const queryClient = useQueryClient();
 
   const especialidades = [
     'Cardiologia', 'Dermatologia', 'Neurologia', 'Ortopedia', 
     'Pediatria', 'Ginecologia', 'Oftalmologia', 'Psiquiatria'
   ];
 
-  const filteredMedicos = medicos.filter(medico =>
-    medico.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    medico.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    medico.crm.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Buscar médicos
+  const { data: medicos = [], isLoading: loadingMedicos } = useQuery({
+    queryKey: ['medicos'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('medicos')
+        .select(`
+          *,
+          empresas (
+            nome
+          )
+        `)
+        .order('nome');
+      
+      if (error) throw error;
+      return data as Medico[];
+    }
+  });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    const empresaSelecionada = empresas.find(emp => emp.id === formData.empresaId);
-    
-    if (editingMedico) {
-      setMedicos(medicos.map(medico => 
-        medico.id === editingMedico.id 
-          ? { 
-              ...medico, 
-              ...formData,
-              empresaNome: empresaSelecionada?.nome || '',
-              status: 'ativo' as const
-            }
-          : medico
-      ));
+  // Buscar empresas
+  const { data: empresas = [] } = useQuery({
+    queryKey: ['empresas'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('empresas')
+        .select('id, nome')
+        .eq('status', 'ativa')
+        .order('nome');
+      
+      if (error) throw error;
+      return data as Empresa[];
+    }
+  });
+
+  // Criar médico
+  const createMedico = useMutation({
+    mutationFn: async (newMedico: Omit<Medico, 'id' | 'created_at' | 'updated_at' | 'empresas'>) => {
+      const { data, error } = await supabase
+        .from('medicos')
+        .insert([newMedico])
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['medicos'] });
+      toast({
+        title: "Médico cadastrado!",
+        description: "Novo médico foi adicionado ao sistema.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao cadastrar médico",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Atualizar médico
+  const updateMedico = useMutation({
+    mutationFn: async ({ id, ...updates }: Partial<Medico> & { id: string }) => {
+      const { data, error } = await supabase
+        .from('medicos')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['medicos'] });
       toast({
         title: "Médico atualizado!",
         description: "Os dados do médico foram atualizados com sucesso.",
       });
-    } else {
-      const novoMedico: Medico = {
-        id: Date.now().toString(),
-        ...formData,
-        empresaNome: empresaSelecionada?.nome || '',
-        status: 'ativo'
-      };
-      setMedicos([...medicos, novoMedico]);
+    },
+    onError: (error: any) => {
       toast({
-        title: "Médico cadastrado!",
-        description: "Novo médico foi adicionado ao sistema.",
+        title: "Erro ao atualizar médico",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Deletar médico
+  const deleteMedico = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('medicos')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['medicos'] });
+      toast({
+        title: "Médico removido!",
+        description: "O médico foi removido do sistema.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao remover médico",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  });
+
+  const filteredMedicos = medicos.filter(medico =>
+    medico.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    medico.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    medico.crm.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (editingMedico) {
+      await updateMedico.mutateAsync({
+        id: editingMedico.id,
+        ...formData,
+        status: 'ativa' as const
+      });
+    } else {
+      await createMedico.mutateAsync({
+        ...formData,
+        status: 'ativa' as const
       });
     }
 
@@ -127,10 +199,8 @@ const Medicos = () => {
       email: '',
       crm: '',
       especialidade: '',
-      empresaId: '',
-      telefone: '',
-      token: '',
-      isPaid: true
+      empresa_id: '',
+      telefone: ''
     });
     setEditingMedico(null);
     setIsDialogOpen(false);
@@ -140,29 +210,22 @@ const Medicos = () => {
     setEditingMedico(medico);
     setFormData({
       nome: medico.nome,
-      email: medico.email,
+      email: medico.email || '',
       crm: medico.crm,
-      especialidade: medico.especialidade,
-      empresaId: medico.empresaId,
-      telefone: medico.telefone,
-      token: medico.token || '',
-      isPaid: medico.isPaid || false
+      especialidade: medico.especialidade || '',
+      empresa_id: medico.empresa_id || '',
+      telefone: medico.telefone || ''
     });
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-    setMedicos(medicos.filter(medico => medico.id !== id));
-    toast({
-      title: "Médico removido!",
-      description: "O médico foi removido do sistema.",
-    });
+  const handleDelete = async (id: string) => {
+    await deleteMedico.mutateAsync(id);
   };
 
-  const generateToken = () => {
-    const token = 'TOKEN' + Math.random().toString(36).substr(2, 9).toUpperCase();
-    setFormData({ ...formData, token });
-  };
+  if (loadingMedicos) {
+    return <div className="flex justify-center items-center h-64">Carregando...</div>;
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -208,7 +271,6 @@ const Medicos = () => {
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    required
                   />
                 </div>
                 
@@ -230,7 +292,6 @@ const Medicos = () => {
                     value={formData.telefone}
                     onChange={(e) => setFormData({ ...formData, telefone: e.target.value })}
                     placeholder="(11) 99999-9999"
-                    required
                   />
                 </div>
                 
@@ -254,8 +315,8 @@ const Medicos = () => {
                 <div className="space-y-2">
                   <Label htmlFor="empresa">Empresa</Label>
                   <Select 
-                    value={formData.empresaId} 
-                    onValueChange={(value) => setFormData({ ...formData, empresaId: value })}
+                    value={formData.empresa_id} 
+                    onValueChange={(value) => setFormData({ ...formData, empresa_id: value })}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione uma empresa" />
@@ -269,37 +330,15 @@ const Medicos = () => {
                 </div>
               </div>
               
-              <div className="space-y-4 p-4 bg-primary/5 rounded-lg border border-primary/20">
-                <Label className="text-primary font-medium">Controle de Acesso (Admin apenas)</Label>
-                
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Token de acesso"
-                    value={formData.token}
-                    onChange={(e) => setFormData({ ...formData, token: e.target.value })}
-                  />
-                  <Button type="button" variant="outline" onClick={generateToken}>
-                    Gerar Token
-                  </Button>
-                </div>
-                
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="isPaid"
-                    checked={formData.isPaid}
-                    onChange={(e) => setFormData({ ...formData, isPaid: e.target.checked })}
-                    className="rounded border-primary/20"
-                  />
-                  <Label htmlFor="isPaid">Usuário com pagamento em dia</Label>
-                </div>
-              </div>
-              
               <div className="flex justify-end space-x-2 pt-4">
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancelar
                 </Button>
-                <Button type="submit" className="bg-gradient-to-r from-primary to-secondary hover:from-primary-dark hover:to-secondary-dark text-white">
+                <Button 
+                  type="submit" 
+                  className="bg-gradient-to-r from-primary to-secondary hover:from-primary-dark hover:to-secondary-dark text-white"
+                  disabled={createMedico.isPending || updateMedico.isPending}
+                >
                   {editingMedico ? 'Atualizar' : 'Cadastrar'}
                 </Button>
               </div>
@@ -347,7 +386,6 @@ const Medicos = () => {
                   <TableHead>CRM</TableHead>
                   <TableHead>Especialidade</TableHead>
                   <TableHead>Empresa</TableHead>
-                  <TableHead>Status Pagamento</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Ações</TableHead>
                 </TableRow>
@@ -358,20 +396,15 @@ const Medicos = () => {
                     <TableCell className="font-medium">
                       <div>
                         <div className="font-semibold text-primary">{medico.nome}</div>
-                        <div className="text-sm text-gray-500">{medico.email}</div>
+                        {medico.email && <div className="text-sm text-gray-500">{medico.email}</div>}
                       </div>
                     </TableCell>
                     <TableCell>{medico.crm}</TableCell>
-                    <TableCell>{medico.especialidade}</TableCell>
-                    <TableCell>{medico.empresaNome}</TableCell>
+                    <TableCell>{medico.especialidade || '-'}</TableCell>
+                    <TableCell>{medico.empresas?.nome || '-'}</TableCell>
                     <TableCell>
-                      <Badge variant={medico.isPaid ? "default" : "destructive"}>
-                        {medico.isPaid ? "Pago" : "Pendente"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={medico.status === 'ativo' ? "default" : "secondary"}>
-                        {medico.status === 'ativo' ? 'Ativo' : 'Inativo'}
+                      <Badge variant={medico.status === 'ativa' ? "default" : "secondary"}>
+                        {medico.status === 'ativa' ? 'Ativo' : 'Inativo'}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -387,6 +420,7 @@ const Medicos = () => {
                           variant="outline"
                           size="sm"
                           onClick={() => handleDelete(medico.id)}
+                          disabled={deleteMedico.isPending}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>

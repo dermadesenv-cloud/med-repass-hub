@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,9 +8,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { BarChart3, Download, FileText, Calendar, TrendingUp, TrendingDown } from 'lucide-react';
 import { DateRange } from "react-day-picker";
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 interface RelatorioData {
-  periodo: string;
   totalProcedimentos: number;
   totalValor: number;
   medicosMaisAtivos: Array<{
@@ -28,26 +30,100 @@ const Relatorios = () => {
   const [tipoRelatorio, setTipoRelatorio] = useState('procedimentos');
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   
-  const dadosRelatorio: RelatorioData = {
-    periodo: 'Janeiro 2024',
-    totalProcedimentos: 248,
-    totalValor: 124500.00,
-    medicosMaisAtivos: [
-      { nome: 'Dr. João Silva', procedimentos: 45, valor: 22500.00 },
-      { nome: 'Dra. Maria Santos', procedimentos: 38, valor: 19000.00 },
-      { nome: 'Dr. Carlos Oliveira', procedimentos: 32, valor: 16000.00 },
-    ],
-    procedimentosMaisRealizados: [
-      { nome: 'Consulta Cardiológica', quantidade: 65, valor: 9750.00 },
-      { nome: 'Exame de Sangue', quantidade: 52, valor: 2600.00 },
-      { nome: 'Ultrassom', quantidade: 43, valor: 12900.00 },
-    ]
-  };
+  // Buscar dados dos relatórios
+  const { data: relatorioData, isLoading } = useQuery({
+    queryKey: ['relatorios', dateRange],
+    queryFn: async () => {
+      let query = supabase
+        .from('lancamentos')
+        .select(`
+          *,
+          lancamento_itens (
+            quantidade,
+            valor_unitario,
+            valor_total,
+            procedimentos (
+              nome
+            )
+          ),
+          medicos (
+            nome
+          )
+        `);
+
+      if (dateRange?.from) {
+        query = query.gte('data_lancamento', dateRange.from.toISOString().split('T')[0]);
+      }
+      if (dateRange?.to) {
+        query = query.lte('data_lancamento', dateRange.to.toISOString().split('T')[0]);
+      }
+
+      const { data: lancamentos, error } = await query;
+      
+      if (error) throw error;
+
+      // Processar dados para relatório
+      const totalProcedimentos = lancamentos?.reduce((sum, l) => sum + (l.lancamento_itens?.length || 0), 0) || 0;
+      const totalValor = lancamentos?.reduce((sum, l) => sum + Number(l.valor_total || 0), 0) || 0;
+
+      // Médicos mais ativos
+      const medicoStats = new Map();
+      lancamentos?.forEach(lancamento => {
+        const medico = lancamento.medicos?.nome;
+        if (medico) {
+          const current = medicoStats.get(medico) || { nome: medico, procedimentos: 0, valor: 0 };
+          current.procedimentos += lancamento.lancamento_itens?.length || 0;
+          current.valor += Number(lancamento.valor_total || 0);
+          medicoStats.set(medico, current);
+        }
+      });
+
+      const medicosMaisAtivos = Array.from(medicoStats.values())
+        .sort((a, b) => b.procedimentos - a.procedimentos)
+        .slice(0, 5);
+
+      // Procedimentos mais realizados
+      const procedimentoStats = new Map();
+      lancamentos?.forEach(lancamento => {
+        lancamento.lancamento_itens?.forEach((item: any) => {
+          const nome = item.procedimentos?.nome;
+          if (nome) {
+            const current = procedimentoStats.get(nome) || { nome, quantidade: 0, valor: 0 };
+            current.quantidade += item.quantidade;
+            current.valor += Number(item.valor_total || 0);
+            procedimentoStats.set(nome, current);
+          }
+        });
+      });
+
+      const procedimentosMaisRealizados = Array.from(procedimentoStats.values())
+        .sort((a, b) => b.quantidade - a.quantidade)
+        .slice(0, 5);
+
+      return {
+        totalProcedimentos,
+        totalValor,
+        medicosMaisAtivos,
+        procedimentosMaisRealizados
+      } as RelatorioData;
+    }
+  });
 
   const handleExportarRelatorio = () => {
     // Implementar lógica de exportação
     console.log('Exportando relatório...');
   };
+
+  const formatCurrency = (value: number) => {
+    return value.toLocaleString('pt-BR', { 
+      style: 'currency', 
+      currency: 'BRL' 
+    });
+  };
+
+  if (isLoading) {
+    return <div className="flex justify-center items-center h-64">Carregando relatórios...</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -100,7 +176,7 @@ const Relatorios = () => {
             <div className="flex items-end">
               <Button className="w-full">
                 <FileText className="mr-2 h-4 w-4" />
-                Gerar Relatório
+                Atualizar Relatório
               </Button>
             </div>
           </div>
@@ -117,10 +193,10 @@ const Relatorios = () => {
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{dadosRelatorio.totalProcedimentos}</div>
+            <div className="text-2xl font-bold">{relatorioData?.totalProcedimentos || 0}</div>
             <p className="text-xs text-muted-foreground">
               <TrendingUp className="inline h-3 w-3 mr-1" />
-              +12% em relação ao mês anterior
+              Procedimentos realizados
             </p>
           </CardContent>
         </Card>
@@ -134,11 +210,11 @@ const Relatorios = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              R$ {dadosRelatorio.totalValor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              {formatCurrency(relatorioData?.totalValor || 0)}
             </div>
             <p className="text-xs text-muted-foreground">
               <TrendingUp className="inline h-3 w-3 mr-1" />
-              +8% em relação ao mês anterior
+              Valor total dos lançamentos
             </p>
           </CardContent>
         </Card>
@@ -152,11 +228,14 @@ const Relatorios = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              R$ {(dadosRelatorio.totalValor / dadosRelatorio.totalProcedimentos).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              {formatCurrency(
+                relatorioData?.totalProcedimentos 
+                  ? (relatorioData.totalValor / relatorioData.totalProcedimentos) 
+                  : 0
+              )}
             </div>
             <p className="text-xs text-muted-foreground">
-              <TrendingDown className="inline h-3 w-3 mr-1" />
-              -2% em relação ao mês anterior
+              Valor médio por procedimento
             </p>
           </CardContent>
         </Card>
@@ -169,7 +248,7 @@ const Relatorios = () => {
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{dadosRelatorio.medicosMaisAtivos.length}</div>
+            <div className="text-2xl font-bold">{relatorioData?.medicosMaisAtivos.length || 0}</div>
             <p className="text-xs text-muted-foreground">
               Médicos com procedimentos no período
             </p>
@@ -196,17 +275,23 @@ const Relatorios = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {dadosRelatorio.medicosMaisAtivos.map((medico, index) => (
+                {relatorioData?.medicosMaisAtivos.map((medico, index) => (
                   <TableRow key={index}>
                     <TableCell className="font-medium">{medico.nome}</TableCell>
                     <TableCell className="text-center">
                       <Badge variant="outline">{medico.procedimentos}</Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      R$ {medico.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      {formatCurrency(medico.valor)}
                     </TableCell>
                   </TableRow>
-                ))}
+                )) || (
+                  <TableRow>
+                    <TableCell colSpan={3} className="text-center text-muted-foreground">
+                      Nenhum dado encontrado
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </CardContent>
@@ -230,17 +315,23 @@ const Relatorios = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {dadosRelatorio.procedimentosMaisRealizados.map((procedimento, index) => (
+                {relatorioData?.procedimentosMaisRealizados.map((procedimento, index) => (
                   <TableRow key={index}>
                     <TableCell className="font-medium">{procedimento.nome}</TableCell>
                     <TableCell className="text-center">
                       <Badge variant="outline">{procedimento.quantidade}</Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      R$ {procedimento.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      {formatCurrency(procedimento.valor)}
                     </TableCell>
                   </TableRow>
-                ))}
+                )) || (
+                  <TableRow>
+                    <TableCell colSpan={3} className="text-center text-muted-foreground">
+                      Nenhum dado encontrado
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </CardContent>

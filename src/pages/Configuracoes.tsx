@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,50 +10,151 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Settings, Shield, Bell, Database, Mail, Globe } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+
+interface ConfiguracaoItem {
+  chave: string;
+  valor: string;
+  descricao?: string;
+  tipo: string;
+}
 
 const Configuracoes = () => {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   
-  const [configuracoes, setConfiguracoes] = useState({
-    sistema: {
-      nomeEmpresa: 'Sistema Médico',
-      cnpj: '12.345.678/0001-90',
-      telefone: '(11) 3456-7890',
-      email: 'contato@sistemamedico.com.br',
-      endereco: 'Rua das Flores, 123 - São Paulo/SP',
-      timezone: 'America/Sao_Paulo'
-    },
-    seguranca: {
-      tentativasLogin: 3,
-      tempoSessao: 480, // em minutos
-      senhaComplexidade: true,
-      autenticacaoDoisFatores: false,
-      logAuditoria: true
-    },
-    notificacoes: {
-      emailProcedimentos: true,
-      emailPagamentos: true,
-      emailRelatorios: false,
-      pushNotifications: true
-    },
-    backup: {
-      backupAutomatico: true,
-      frequenciaBackup: 'diario',
-      manterBackups: 30 // dias
+  // Buscar configurações
+  const { data: configuracoes = [], isLoading } = useQuery({
+    queryKey: ['configuracoes'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('configuracoes')
+        .select('*');
+      
+      if (error) throw error;
+      return data as ConfiguracaoItem[];
     }
   });
 
-  const handleSalvar = (categoria: string, dados: any) => {
-    setConfiguracoes(prev => ({
-      ...prev,
-      [categoria]: { ...prev[categoria as keyof typeof prev], ...dados }
-    }));
-    
-    toast({
-      title: "Configurações salvas",
-      description: "As configurações foram atualizadas com sucesso.",
-    });
+  // Salvar configuração
+  const salvarConfiguracao = useMutation({
+    mutationFn: async ({ chave, valor, descricao, tipo }: ConfiguracaoItem) => {
+      const { data, error } = await supabase
+        .from('configuracoes')
+        .upsert([{ chave, valor, descricao, tipo }], {
+          onConflict: 'chave'
+        });
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['configuracoes'] });
+      toast({
+        title: "Configurações salvas",
+        description: "As configurações foram atualizadas com sucesso.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao salvar configurações",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Função para buscar valor de configuração
+  const getConfigValue = (chave: string, defaultValue: string = '') => {
+    const config = configuracoes.find(c => c.chave === chave);
+    return config ? config.valor : defaultValue;
   };
+
+  // Função para atualizar configuração
+  const updateConfig = (chave: string, valor: string, descricao: string, tipo: string = 'string') => {
+    salvarConfiguracao.mutate({ chave, valor, descricao, tipo });
+  };
+
+  const [localValues, setLocalValues] = useState({
+    nomeEmpresa: '',
+    cnpj: '',
+    telefone: '',
+    email: '',
+    endereco: '',
+    timezone: 'America/Sao_Paulo',
+    tentativasLogin: '3',
+    tempoSessao: '480',
+    senhaComplexidade: true,
+    autenticacaoDoisFatores: false,
+    logAuditoria: true,
+    emailProcedimentos: true,
+    emailPagamentos: true,
+    emailRelatorios: false,
+    pushNotifications: true,
+    backupAutomatico: true,
+    frequenciaBackup: 'diario',
+    manterBackups: '30'
+  });
+
+  useEffect(() => {
+    if (configuracoes.length > 0) {
+      setLocalValues({
+        nomeEmpresa: getConfigValue('sistema_nome_empresa', 'Sistema Médico'),
+        cnpj: getConfigValue('sistema_cnpj', ''),
+        telefone: getConfigValue('sistema_telefone', ''),
+        email: getConfigValue('sistema_email', ''),
+        endereco: getConfigValue('sistema_endereco', ''),
+        timezone: getConfigValue('sistema_timezone', 'America/Sao_Paulo'),
+        tentativasLogin: getConfigValue('seguranca_tentativas_login', '3'),
+        tempoSessao: getConfigValue('seguranca_tempo_sessao', '480'),
+        senhaComplexidade: getConfigValue('seguranca_senha_complexidade', 'true') === 'true',
+        autenticacaoDoisFatores: getConfigValue('seguranca_2fa', 'false') === 'true',
+        logAuditoria: getConfigValue('seguranca_log_auditoria', 'true') === 'true',
+        emailProcedimentos: getConfigValue('notificacoes_email_procedimentos', 'true') === 'true',
+        emailPagamentos: getConfigValue('notificacoes_email_pagamentos', 'true') === 'true',
+        emailRelatorios: getConfigValue('notificacoes_email_relatorios', 'false') === 'true',
+        pushNotifications: getConfigValue('notificacoes_push', 'true') === 'true',
+        backupAutomatico: getConfigValue('backup_automatico', 'true') === 'true',
+        frequenciaBackup: getConfigValue('backup_frequencia', 'diario'),
+        manterBackups: getConfigValue('backup_manter_dias', '30')
+      });
+    }
+  }, [configuracoes]);
+
+  const handleSalvarSistema = () => {
+    updateConfig('sistema_nome_empresa', localValues.nomeEmpresa, 'Nome da empresa');
+    updateConfig('sistema_cnpj', localValues.cnpj, 'CNPJ da empresa');
+    updateConfig('sistema_telefone', localValues.telefone, 'Telefone da empresa');
+    updateConfig('sistema_email', localValues.email, 'Email da empresa');
+    updateConfig('sistema_endereco', localValues.endereco, 'Endereço da empresa');
+    updateConfig('sistema_timezone', localValues.timezone, 'Fuso horário do sistema');
+  };
+
+  const handleSalvarSeguranca = () => {
+    updateConfig('seguranca_tentativas_login', localValues.tentativasLogin, 'Número máximo de tentativas de login', 'number');
+    updateConfig('seguranca_tempo_sessao', localValues.tempoSessao, 'Tempo de sessão em minutos', 'number');
+    updateConfig('seguranca_senha_complexidade', localValues.senhaComplexidade.toString(), 'Exigir senha complexa', 'boolean');
+    updateConfig('seguranca_2fa', localValues.autenticacaoDoisFatores.toString(), 'Autenticação de dois fatores', 'boolean');
+    updateConfig('seguranca_log_auditoria', localValues.logAuditoria.toString(), 'Log de auditoria ativo', 'boolean');
+  };
+
+  const handleSalvarNotificacoes = () => {
+    updateConfig('notificacoes_email_procedimentos', localValues.emailProcedimentos.toString(), 'Notificações de procedimentos por email', 'boolean');
+    updateConfig('notificacoes_email_pagamentos', localValues.emailPagamentos.toString(), 'Notificações de pagamentos por email', 'boolean');
+    updateConfig('notificacoes_email_relatorios', localValues.emailRelatorios.toString(), 'Notificações de relatórios por email', 'boolean');
+    updateConfig('notificacoes_push', localValues.pushNotifications.toString(), 'Notificações push ativas', 'boolean');
+  };
+
+  const handleSalvarBackup = () => {
+    updateConfig('backup_automatico', localValues.backupAutomatico.toString(), 'Backup automático ativo', 'boolean');
+    updateConfig('backup_frequencia', localValues.frequenciaBackup, 'Frequência do backup automático');
+    updateConfig('backup_manter_dias', localValues.manterBackups, 'Dias para manter backups', 'number');
+  };
+
+  if (isLoading) {
+    return <div className="flex justify-center items-center h-64">Carregando configurações...</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -90,33 +192,24 @@ const Configuracoes = () => {
                   <Label htmlFor="nomeEmpresa">Nome da Empresa</Label>
                   <Input
                     id="nomeEmpresa"
-                    value={configuracoes.sistema.nomeEmpresa}
-                    onChange={(e) => setConfiguracoes(prev => ({
-                      ...prev,
-                      sistema: { ...prev.sistema, nomeEmpresa: e.target.value }
-                    }))}
+                    value={localValues.nomeEmpresa}
+                    onChange={(e) => setLocalValues(prev => ({ ...prev, nomeEmpresa: e.target.value }))}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="cnpj">CNPJ</Label>
                   <Input
                     id="cnpj"
-                    value={configuracoes.sistema.cnpj}
-                    onChange={(e) => setConfiguracoes(prev => ({
-                      ...prev,
-                      sistema: { ...prev.sistema, cnpj: e.target.value }
-                    }))}
+                    value={localValues.cnpj}
+                    onChange={(e) => setLocalValues(prev => ({ ...prev, cnpj: e.target.value }))}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="telefone">Telefone</Label>
                   <Input
                     id="telefone"
-                    value={configuracoes.sistema.telefone}
-                    onChange={(e) => setConfiguracoes(prev => ({
-                      ...prev,
-                      sistema: { ...prev.sistema, telefone: e.target.value }
-                    }))}
+                    value={localValues.telefone}
+                    onChange={(e) => setLocalValues(prev => ({ ...prev, telefone: e.target.value }))}
                   />
                 </div>
                 <div className="space-y-2">
@@ -124,11 +217,8 @@ const Configuracoes = () => {
                   <Input
                     id="email"
                     type="email"
-                    value={configuracoes.sistema.email}
-                    onChange={(e) => setConfiguracoes(prev => ({
-                      ...prev,
-                      sistema: { ...prev.sistema, email: e.target.value }
-                    }))}
+                    value={localValues.email}
+                    onChange={(e) => setLocalValues(prev => ({ ...prev, email: e.target.value }))}
                   />
                 </div>
               </div>
@@ -137,20 +227,14 @@ const Configuracoes = () => {
                 <Label htmlFor="endereco">Endereço</Label>
                 <Input
                   id="endereco"
-                  value={configuracoes.sistema.endereco}
-                  onChange={(e) => setConfiguracoes(prev => ({
-                    ...prev,
-                    sistema: { ...prev.sistema, endereco: e.target.value }
-                  }))}
+                  value={localValues.endereco}
+                  onChange={(e) => setLocalValues(prev => ({ ...prev, endereco: e.target.value }))}
                 />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="timezone">Fuso Horário</Label>
-                <Select value={configuracoes.sistema.timezone} onValueChange={(value) => setConfiguracoes(prev => ({
-                  ...prev,
-                  sistema: { ...prev.sistema, timezone: value }
-                }))}>
+                <Select value={localValues.timezone} onValueChange={(value) => setLocalValues(prev => ({ ...prev, timezone: value }))}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -162,7 +246,10 @@ const Configuracoes = () => {
                 </Select>
               </div>
 
-              <Button onClick={() => handleSalvar('sistema', configuracoes.sistema)}>
+              <Button 
+                onClick={handleSalvarSistema}
+                disabled={salvarConfiguracao.isPending}
+              >
                 Salvar Configurações
               </Button>
             </CardContent>
@@ -189,11 +276,8 @@ const Configuracoes = () => {
                     type="number"
                     min="1"
                     max="10"
-                    value={configuracoes.seguranca.tentativasLogin}
-                    onChange={(e) => setConfiguracoes(prev => ({
-                      ...prev,
-                      seguranca: { ...prev.seguranca, tentativasLogin: parseInt(e.target.value) }
-                    }))}
+                    value={localValues.tentativasLogin}
+                    onChange={(e) => setLocalValues(prev => ({ ...prev, tentativasLogin: e.target.value }))}
                   />
                 </div>
                 <div className="space-y-2">
@@ -203,11 +287,8 @@ const Configuracoes = () => {
                     type="number"
                     min="30"
                     max="1440"
-                    value={configuracoes.seguranca.tempoSessao}
-                    onChange={(e) => setConfiguracoes(prev => ({
-                      ...prev,
-                      seguranca: { ...prev.seguranca, tempoSessao: parseInt(e.target.value) }
-                    }))}
+                    value={localValues.tempoSessao}
+                    onChange={(e) => setLocalValues(prev => ({ ...prev, tempoSessao: e.target.value }))}
                   />
                 </div>
               </div>
@@ -224,11 +305,8 @@ const Configuracoes = () => {
                   </div>
                   <Switch
                     id="senhaComplexidade"
-                    checked={configuracoes.seguranca.senhaComplexidade}
-                    onCheckedChange={(checked) => setConfiguracoes(prev => ({
-                      ...prev,
-                      seguranca: { ...prev.seguranca, senhaComplexidade: checked }
-                    }))}
+                    checked={localValues.senhaComplexidade}
+                    onCheckedChange={(checked) => setLocalValues(prev => ({ ...prev, senhaComplexidade: checked }))}
                   />
                 </div>
 
@@ -241,11 +319,8 @@ const Configuracoes = () => {
                   </div>
                   <Switch
                     id="autenticacaoDoisFatores"
-                    checked={configuracoes.seguranca.autenticacaoDoisFatores}
-                    onCheckedChange={(checked) => setConfiguracoes(prev => ({
-                      ...prev,
-                      seguranca: { ...prev.seguranca, autenticacaoDoisFatores: checked }
-                    }))}
+                    checked={localValues.autenticacaoDoisFatores}
+                    onCheckedChange={(checked) => setLocalValues(prev => ({ ...prev, autenticacaoDoisFatores: checked }))}
                   />
                 </div>
 
@@ -258,16 +333,16 @@ const Configuracoes = () => {
                   </div>
                   <Switch
                     id="logAuditoria"
-                    checked={configuracoes.seguranca.logAuditoria}
-                    onCheckedChange={(checked) => setConfiguracoes(prev => ({
-                      ...prev,
-                      seguranca: { ...prev.seguranca, logAuditoria: checked }
-                    }))}
+                    checked={localValues.logAuditoria}
+                    onCheckedChange={(checked) => setLocalValues(prev => ({ ...prev, logAuditoria: checked }))}
                   />
                 </div>
               </div>
 
-              <Button onClick={() => handleSalvar('seguranca', configuracoes.seguranca)}>
+              <Button 
+                onClick={handleSalvarSeguranca}
+                disabled={salvarConfiguracao.isPending}
+              >
                 Salvar Configurações
               </Button>
             </CardContent>
@@ -296,11 +371,8 @@ const Configuracoes = () => {
                   </div>
                   <Switch
                     id="emailProcedimentos"
-                    checked={configuracoes.notificacoes.emailProcedimentos}
-                    onCheckedChange={(checked) => setConfiguracoes(prev => ({
-                      ...prev,
-                      notificacoes: { ...prev.notificacoes, emailProcedimentos: checked }
-                    }))}
+                    checked={localValues.emailProcedimentos}
+                    onCheckedChange={(checked) => setLocalValues(prev => ({ ...prev, emailProcedimentos: checked }))}
                   />
                 </div>
 
@@ -313,11 +385,8 @@ const Configuracoes = () => {
                   </div>
                   <Switch
                     id="emailPagamentos"
-                    checked={configuracoes.notificacoes.emailPagamentos}
-                    onCheckedChange={(checked) => setConfiguracoes(prev => ({
-                      ...prev,
-                      notificacoes: { ...prev.notificacoes, emailPagamentos: checked }
-                    }))}
+                    checked={localValues.emailPagamentos}
+                    onCheckedChange={(checked) => setLocalValues(prev => ({ ...prev, emailPagamentos: checked }))}
                   />
                 </div>
 
@@ -330,11 +399,8 @@ const Configuracoes = () => {
                   </div>
                   <Switch
                     id="emailRelatorios"
-                    checked={configuracoes.notificacoes.emailRelatorios}
-                    onCheckedChange={(checked) => setConfiguracoes(prev => ({
-                      ...prev,
-                      notificacoes: { ...prev.notificacoes, emailRelatorios: checked }
-                    }))}
+                    checked={localValues.emailRelatorios}
+                    onCheckedChange={(checked) => setLocalValues(prev => ({ ...prev, emailRelatorios: checked }))}
                   />
                 </div>
 
@@ -347,16 +413,16 @@ const Configuracoes = () => {
                   </div>
                   <Switch
                     id="pushNotifications"
-                    checked={configuracoes.notificacoes.pushNotifications}
-                    onCheckedChange={(checked) => setConfiguracoes(prev => ({
-                      ...prev,
-                      notificacoes: { ...prev.notificacoes, pushNotifications: checked }
-                    }))}
+                    checked={localValues.pushNotifications}
+                    onCheckedChange={(checked) => setLocalValues(prev => ({ ...prev, pushNotifications: checked }))}
                   />
                 </div>
               </div>
 
-              <Button onClick={() => handleSalvar('notificacoes', configuracoes.notificacoes)}>
+              <Button 
+                onClick={handleSalvarNotificacoes}
+                disabled={salvarConfiguracao.isPending}
+              >
                 Salvar Configurações
               </Button>
             </CardContent>
@@ -384,21 +450,15 @@ const Configuracoes = () => {
                 </div>
                 <Switch
                   id="backupAutomatico"
-                  checked={configuracoes.backup.backupAutomatico}
-                  onCheckedChange={(checked) => setConfiguracoes(prev => ({
-                    ...prev,
-                    backup: { ...prev.backup, backupAutomatico: checked }
-                  }))}
+                  checked={localValues.backupAutomatico}
+                  onCheckedChange={(checked) => setLocalValues(prev => ({ ...prev, backupAutomatico: checked }))}
                 />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="frequenciaBackup">Frequência do Backup</Label>
-                  <Select value={configuracoes.backup.frequenciaBackup} onValueChange={(value) => setConfiguracoes(prev => ({
-                    ...prev,
-                    backup: { ...prev.backup, frequenciaBackup: value }
-                  }))}>
+                  <Select value={localValues.frequenciaBackup} onValueChange={(value) => setLocalValues(prev => ({ ...prev, frequenciaBackup: value }))}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -416,17 +476,17 @@ const Configuracoes = () => {
                     type="number"
                     min="7"
                     max="365"
-                    value={configuracoes.backup.manterBackups}
-                    onChange={(e) => setConfiguracoes(prev => ({
-                      ...prev,
-                      backup: { ...prev.backup, manterBackups: parseInt(e.target.value) }
-                    }))}
+                    value={localValues.manterBackups}
+                    onChange={(e) => setLocalValues(prev => ({ ...prev, manterBackups: e.target.value }))}
                   />
                 </div>
               </div>
 
               <div className="flex gap-2">
-                <Button onClick={() => handleSalvar('backup', configuracoes.backup)}>
+                <Button 
+                  onClick={handleSalvarBackup}
+                  disabled={salvarConfiguracao.isPending}
+                >
                   Salvar Configurações
                 </Button>
                 <Button variant="outline">
