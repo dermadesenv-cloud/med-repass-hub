@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,6 +12,7 @@ import { Plus, Edit, Trash2, Search, UserPlus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/context/AuthContext';
 
 interface Medico {
   id: string;
@@ -35,6 +36,7 @@ interface Empresa {
 }
 
 const Medicos = () => {
+  const { isAdmin, allowedEmpresas } = useAuth();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingMedico, setEditingMedico] = useState<Medico | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -55,34 +57,46 @@ const Medicos = () => {
     'Pediatria', 'Ginecologia', 'Oftalmologia', 'Psiquiatria'
   ];
 
-  // Buscar médicos
+  // Buscar médicos com filtro por empresa
   const { data: medicos = [], isLoading: loadingMedicos } = useQuery({
-    queryKey: ['medicos'],
+    queryKey: ['medicos', isAdmin, allowedEmpresas],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('medicos')
         .select(`
           *,
           empresas (
             nome
           )
-        `)
-        .order('nome');
+        `);
+
+      // Se não for admin, filtrar por empresas permitidas
+      if (!isAdmin && allowedEmpresas.length > 0) {
+        query = query.in('empresa_id', allowedEmpresas);
+      }
+
+      const { data, error } = await query.order('nome');
       
       if (error) throw error;
       return data as Medico[];
     }
   });
 
-  // Buscar empresas
+  // Buscar empresas (apenas as permitidas para usuários não admin)
   const { data: empresas = [] } = useQuery({
-    queryKey: ['empresas'],
+    queryKey: ['empresas-allowed', isAdmin, allowedEmpresas],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('empresas')
         .select('id, nome')
-        .eq('status', 'ativa')
-        .order('nome');
+        .eq('status', 'ativa');
+
+      // Se não for admin, filtrar por empresas permitidas
+      if (!isAdmin && allowedEmpresas.length > 0) {
+        query = query.in('id', allowedEmpresas);
+      }
+
+      const { data, error } = await query.order('nome');
       
       if (error) throw error;
       return data as Empresa[];
@@ -220,7 +234,9 @@ const Medicos = () => {
   };
 
   const handleDelete = async (id: string) => {
-    await deleteMedico.mutateAsync(id);
+    if (confirm('Tem certeza que deseja remover este médico?')) {
+      await deleteMedico.mutateAsync(id);
+    }
   };
 
   if (loadingMedicos) {
@@ -391,43 +407,51 @@ const Medicos = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredMedicos.map((medico) => (
-                  <TableRow key={medico.id}>
-                    <TableCell className="font-medium">
-                      <div>
-                        <div className="font-semibold text-primary">{medico.nome}</div>
-                        {medico.email && <div className="text-sm text-gray-500">{medico.email}</div>}
-                      </div>
-                    </TableCell>
-                    <TableCell>{medico.crm}</TableCell>
-                    <TableCell>{medico.especialidade || '-'}</TableCell>
-                    <TableCell>{medico.empresas?.nome || '-'}</TableCell>
-                    <TableCell>
-                      <Badge variant={medico.status === 'ativa' ? "default" : "secondary"}>
-                        {medico.status === 'ativa' ? 'Ativo' : 'Inativo'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEdit(medico)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDelete(medico.id)}
-                          disabled={deleteMedico.isPending}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                {filteredMedicos.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      Nenhum médico encontrado.
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  filteredMedicos.map((medico) => (
+                    <TableRow key={medico.id}>
+                      <TableCell className="font-medium">
+                        <div>
+                          <div className="font-semibold text-primary">{medico.nome}</div>
+                          {medico.email && <div className="text-sm text-gray-500">{medico.email}</div>}
+                        </div>
+                      </TableCell>
+                      <TableCell>{medico.crm}</TableCell>
+                      <TableCell>{medico.especialidade || '-'}</TableCell>
+                      <TableCell>{medico.empresas?.nome || '-'}</TableCell>
+                      <TableCell>
+                        <Badge variant={medico.status === 'ativa' ? "default" : "secondary"}>
+                          {medico.status === 'ativa' ? 'Ativo' : 'Inativo'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEdit(medico)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDelete(medico.id)}
+                            disabled={deleteMedico.isPending}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>

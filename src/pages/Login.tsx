@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -50,15 +50,6 @@ const Login = () => {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const fillAdminCredentials = () => {
-    setEmail('admin@medpay.com');
-    setPassword('admin123');
-    toast({
-      title: "Credenciais preenchidas",
-      description: "Agora clique em 'Entrar' para fazer login.",
-    });
   };
 
   const isFormLoading = isLoading || authLoading;
@@ -123,39 +114,6 @@ const Login = () => {
               {isFormLoading ? "Entrando..." : "Entrar"}
             </Button>
           </form>
-          
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-            <div className="flex items-center gap-2 mb-3">
-              <AlertCircle className="h-4 w-4 text-blue-600" />
-              <p className="text-sm text-gray-700 font-medium">Credenciais de acesso:</p>
-            </div>
-            <div className="text-sm space-y-2 text-gray-600">
-              <div><strong className="text-gray-800">Admin:</strong> admin@medpay.com / admin123</div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={fillAdminCredentials}
-                className="w-full mt-2 h-8 text-xs border-blue-200 text-blue-600 hover:bg-blue-50"
-              >
-                Preencher credenciais admin
-              </Button>
-            </div>
-          </div>
-
-          {/* Status do sistema */}
-          <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200 text-xs">
-            <p className="text-green-800 font-medium">✅ Sistema corrigido!</p>
-            <p className="text-green-700">Base de dados e autenticação funcionando normalmente.</p>
-          </div>
-
-          {/* Debug info - only show in development */}
-          {process.env.NODE_ENV === 'development' && (
-            <div className="mt-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200 text-xs">
-              <p className="text-yellow-800 font-medium">Debug Info:</p>
-              <p className="text-yellow-700">Check browser console for detailed logs</p>
-            </div>
-          )}
         </CardContent>
       </Card>
     </div>

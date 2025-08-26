@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, Search, Upload, Download, FileText } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, Download, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -37,12 +37,11 @@ interface Empresa {
 }
 
 const Procedimentos = () => {
-  const { profile, isAdmin } = useAuth();
+  const { isAdmin, allowedEmpresas } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [editingProcedimento, setEditingProcedimento] = useState<Procedimento | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategoria, setSelectedCategoria] = useState<string>('todas');
@@ -58,24 +57,30 @@ const Procedimentos = () => {
 
   const categorias = ['Consulta', 'Exame', 'Cirurgia', 'Procedimento', 'Internação'];
 
-  // Buscar empresas ativas
+  // Buscar empresas ativas (apenas as permitidas para usuários não admin)
   const { data: empresas = [] } = useQuery({
-    queryKey: ['empresas-ativas'],
+    queryKey: ['empresas-ativas', isAdmin, allowedEmpresas],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('empresas')
         .select('id, nome, status')
-        .eq('status', 'ativa')
-        .order('nome');
+        .eq('status', 'ativa');
+
+      // Se não for admin, filtrar por empresas permitidas
+      if (!isAdmin && allowedEmpresas.length > 0) {
+        query = query.in('id', allowedEmpresas);
+      }
+
+      const { data, error } = await query.order('nome');
 
       if (error) throw error;
       return data as Empresa[];
     }
   });
 
-  // Buscar procedimentos
+  // Buscar procedimentos com filtro por empresa
   const { data: procedimentos = [], isLoading } = useQuery({
-    queryKey: ['procedimentos'],
+    queryKey: ['procedimentos', isAdmin, allowedEmpresas],
     queryFn: async () => {
       let query = supabase
         .from('procedimentos')
@@ -85,15 +90,14 @@ const Procedimentos = () => {
             id,
             nome
           )
-        `)
-        .order('nome');
+        `);
 
-      // Se não for admin, filtrar por empresa do usuário
-      if (!isAdmin && profile?.empresa_id) {
-        query = query.eq('empresa_id', profile.empresa_id);
+      // Se não for admin, filtrar por empresas permitidas
+      if (!isAdmin && allowedEmpresas.length > 0) {
+        query = query.in('empresa_id', allowedEmpresas);
       }
 
-      const { data, error } = await query;
+      const { data, error } = await query.order('nome');
       if (error) throw error;
       return data as Procedimento[];
     }

@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -15,16 +16,31 @@ interface Profile {
   updated_at: string;
 }
 
+interface UserEmpresa {
+  id: string;
+  user_id: string;
+  empresa_id: string;
+  created_at: string;
+  empresas: {
+    id: string;
+    nome: string;
+    status: string;
+  };
+}
+
 interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   session: Session | null;
   loading: boolean;
   isAdmin: boolean;
+  userEmpresas: UserEmpresa[];
+  allowedEmpresas: string[];
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signUp: (email: string, password: string, nome: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   updateProfile: (data: Partial<Profile>) => Promise<{ error: any }>;
+  fetchUserEmpresas: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -34,15 +50,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [userEmpresas, setUserEmpresas] = useState<UserEmpresa[]>([]);
   const { toast } = useToast();
 
-  // Helper para verificar se é admin - usar email específico como fallback
+  // Helper para verificar se é admin
   const isAdmin = profile?.role === 'admin' || user?.email === 'admin@medpay.com';
+
+  // Lista de IDs das empresas permitidas
+  const allowedEmpresas = isAdmin ? [] : userEmpresas.map(ue => ue.empresa_id);
 
   console.log('AuthContext - isAdmin calculation:', {
     userEmail: user?.email,
     profileRole: profile?.role,
-    isAdmin: isAdmin
+    isAdmin: isAdmin,
+    allowedEmpresas: allowedEmpresas
   });
 
   const fetchProfile = async (userId: string) => {
@@ -94,6 +115,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const fetchUserEmpresas = async () => {
+    if (!user || isAdmin) {
+      setUserEmpresas([]);
+      return;
+    }
+
+    try {
+      console.log('Fetching user empresas for:', user.id);
+      const { data, error } = await supabase
+        .from('user_empresas')
+        .select(`
+          *,
+          empresas (
+            id,
+            nome,
+            status
+          )
+        `)
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Error fetching user empresas:', error);
+        setUserEmpresas([]);
+        return;
+      }
+
+      console.log('User empresas loaded:', data?.length || 0);
+      setUserEmpresas(data || []);
+    } catch (error) {
+      console.error('Exception in fetchUserEmpresas:', error);
+      setUserEmpresas([]);
+    }
+  };
+
   useEffect(() => {
     console.log('AuthProvider: Setting up auth state listener');
     let mounted = true;
@@ -117,6 +172,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else {
           console.log('No user session, clearing profile');
           setProfile(null);
+          setUserEmpresas([]);
         }
         
         setLoading(false);
@@ -154,6 +210,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       subscription.unsubscribe();
     };
   }, []);
+
+  // Buscar empresas do usuário quando o perfil mudar
+  useEffect(() => {
+    if (profile && !isAdmin) {
+      fetchUserEmpresas();
+    }
+  }, [profile, isAdmin]);
 
   const signIn = async (email: string, password: string) => {
     try {
@@ -250,6 +313,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
       setProfile(null);
       setSession(null);
+      setUserEmpresas([]);
       
       toast({
         title: "Logout realizado",
@@ -296,10 +360,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     session,
     loading,
     isAdmin,
+    userEmpresas,
+    allowedEmpresas,
     signIn,
     signUp,
     signOut,
     updateProfile,
+    fetchUserEmpresas,
   };
 
   return (

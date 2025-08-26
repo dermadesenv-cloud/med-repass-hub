@@ -21,6 +21,12 @@ interface Profile {
   empresa_id: string | null;
   created_at: string;
   updated_at: string;
+  user_empresas?: Array<{
+    empresa_id: string;
+    empresas: {
+      nome: string;
+    };
+  }>;
 }
 
 const Usuarios = () => {
@@ -37,7 +43,15 @@ const Usuarios = () => {
       
       const { data, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select(`
+          *,
+          user_empresas (
+            empresa_id,
+            empresas (
+              nome
+            )
+          )
+        `)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -155,7 +169,7 @@ const Usuarios = () => {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Gestão de Usuários</h1>
           <p className="text-muted-foreground">
-            Gerencie usuários, permissões e roles do sistema
+            Gerencie usuários, permissões e empresas do sistema
           </p>
         </div>
         <Button 
@@ -199,6 +213,7 @@ const Usuarios = () => {
                   <TableHead>E-mail</TableHead>
                   <TableHead>Telefone</TableHead>
                   <TableHead>Papel/Permissão</TableHead>
+                  <TableHead>Empresas</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
@@ -206,7 +221,7 @@ const Usuarios = () => {
               <TableBody>
                 {filteredProfiles.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       {searchTerm ? 'Nenhum usuário encontrado.' : 'Nenhum usuário cadastrado.'}
                     </TableCell>
                   </TableRow>
@@ -228,6 +243,19 @@ const Usuarios = () => {
                         <Badge variant={getRoleVariant(userProfile.role)}>
                           {getRoleBadge(userProfile.role)}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {userProfile.role === 'admin' ? (
+                            <Badge variant="secondary" className="text-xs">Todas</Badge>
+                          ) : (
+                            userProfile.user_empresas?.map((ue, index) => (
+                              <Badge key={index} variant="outline" className="text-xs">
+                                {ue.empresas.nome}
+                              </Badge>
+                            )) || <span className="text-muted-foreground text-sm">Nenhuma</span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary" className="bg-green-100 text-green-800">
