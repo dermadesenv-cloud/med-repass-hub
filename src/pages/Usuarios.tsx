@@ -26,7 +26,7 @@ interface Profile {
     empresas: {
       nome: string;
     };
-  }>;
+  }> | null;
 }
 
 const Usuarios = () => {
@@ -41,31 +41,46 @@ const Usuarios = () => {
     try {
       console.log('Fetching profiles as admin:', isAdmin);
       
-      const { data, error } = await supabase
+      // First, get all profiles
+      const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
-        .select(`
-          *,
-          user_empresas (
-            empresa_id,
-            empresas (
-              nome
-            )
-          )
-        `)
+        .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error('Error fetching profiles:', error);
+      if (profilesError) {
+        console.error('Error fetching profiles:', profilesError);
         toast({
           title: "Erro",
-          description: "Erro ao carregar usuários: " + error.message,
+          description: "Erro ao carregar usuários: " + profilesError.message,
           variant: "destructive"
         });
         return;
       }
 
-      console.log('Profiles loaded:', data?.length || 0);
-      setProfiles(data || []);
+      // Then, get user-empresa relationships with empresa details
+      const { data: userEmpresasData, error: userEmpresasError } = await supabase
+        .from('user_empresas')
+        .select(`
+          user_id,
+          empresa_id,
+          empresas (
+            nome
+          )
+        `);
+
+      if (userEmpresasError) {
+        console.error('Error fetching user empresas:', userEmpresasError);
+        // Continue without empresa data
+      }
+
+      // Combine the data
+      const profilesWithEmpresas = profilesData?.map(profile => ({
+        ...profile,
+        user_empresas: userEmpresasData?.filter(ue => ue.user_id === profile.user_id) || []
+      })) || [];
+
+      console.log('Profiles loaded:', profilesWithEmpresas.length);
+      setProfiles(profilesWithEmpresas);
     } catch (error) {
       console.error('Error in fetchProfiles:', error);
       toast({
