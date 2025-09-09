@@ -1,15 +1,15 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Edit2, Trash2, UserCheck, Shield, User } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Shield, User } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { UserForm } from "@/components/UserForm";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 interface Profile {
   id: string;
@@ -17,16 +17,9 @@ interface Profile {
   nome: string;
   email: string;
   telefone: string | null;
-  role: 'admin' | 'usuario' | 'medico';
-  empresa_id: string | null;
+  role: 'admin' | 'usuario';
   created_at: string;
   updated_at: string;
-  user_empresas?: Array<{
-    empresa_id: string;
-    empresas: {
-      nome: string;
-    };
-  }> | null;
 }
 
 const Usuarios = () => {
@@ -41,51 +34,28 @@ const Usuarios = () => {
     try {
       console.log('Fetching profiles as admin:', isAdmin);
       
-      // First, get all profiles
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (profilesError) {
-        console.error('Error fetching profiles:', profilesError);
-        toast({
-          title: "Erro",
-          description: "Erro ao carregar usuários: " + profilesError.message,
-          variant: "destructive"
-        });
-        return;
+        throw profilesError;
       }
 
-      // Then, get user-empresa relationships with empresa details
-      const { data: userEmpresasData, error: userEmpresasError } = await supabase
-        .from('user_empresas')
-        .select(`
-          user_id,
-          empresa_id,
-          empresas (
-            nome
-          )
-        `);
-
-      if (userEmpresasError) {
-        console.error('Error fetching user empresas:', userEmpresasError);
-        // Continue without empresa data
-      }
-
-      // Combine the data
-      const profilesWithEmpresas = profilesData?.map(profile => ({
-        ...profile,
-        user_empresas: userEmpresasData?.filter(ue => ue.user_id === profile.user_id) || []
+      // Filter out 'medico' roles and type cast properly
+      const filteredProfiles = profilesData?.filter(p => p.role !== 'medico').map(p => ({
+        ...p,
+        role: p.role as 'admin' | 'usuario'
       })) || [];
-
-      console.log('Profiles loaded:', profilesWithEmpresas.length);
-      setProfiles(profilesWithEmpresas);
-    } catch (error) {
-      console.error('Error in fetchProfiles:', error);
+      
+      console.log('Profiles data:', filteredProfiles);
+      setProfiles(filteredProfiles);
+    } catch (error: any) {
+      console.error('Error fetching profiles:', error);
       toast({
         title: "Erro",
-        description: "Erro inesperado ao carregar usuários.",
+        description: error.message || "Erro ao carregar usuários.",
         variant: "destructive"
       });
     }
@@ -93,16 +63,14 @@ const Usuarios = () => {
 
   useEffect(() => {
     if (isAdmin) {
-      console.log('User is admin, loading profiles...');
       fetchProfiles();
-    } else {
-      console.log('User is not admin, skipping profile load');
     }
   }, [isAdmin]);
 
   const filteredProfiles = profiles.filter(profile =>
     profile.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    profile.email.toLowerCase().includes(searchTerm.toLowerCase())
+    profile.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    profile.role.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handleEdit = (userProfile: Profile) => {
@@ -111,10 +79,6 @@ const Usuarios = () => {
   };
 
   const handleDelete = async (userProfile: Profile) => {
-    if (!confirm('Tem certeza que deseja remover este usuário?')) {
-      return;
-    }
-
     // Não permitir deletar o próprio usuário admin
     if (userProfile.id === profile?.id) {
       toast({
@@ -126,10 +90,20 @@ const Usuarios = () => {
     }
 
     try {
-      // Deletar do auth (isso também deletará o perfil por cascade)
-      const { error } = await supabase.auth.admin.deleteUser(userProfile.user_id);
+      // Primeiro, delete o perfil do usuário
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', userProfile.id);
+
+      if (profileError) throw profileError;
+
+      // Depois, delete o usuário da auth
+      const { error: authError } = await supabase.auth.admin.deleteUser(userProfile.user_id);
       
-      if (error) throw error;
+      if (authError) {
+        console.warn('Warning: Could not delete auth user, but profile was deleted:', authError);
+      }
 
       await fetchProfiles();
       toast({
@@ -139,7 +113,7 @@ const Usuarios = () => {
     } catch (error: any) {
       console.error('Error deleting user:', error);
       toast({
-        title: "Erro",
+        title: "Erro", 
         description: error.message || "Erro ao remover usuário.",
         variant: "destructive"
       });
@@ -153,7 +127,6 @@ const Usuarios = () => {
   const getRoleBadge = (role: string) => {
     switch (role) {
       case 'admin': return 'Administrador';
-      case 'medico': return 'Médico';
       default: return 'Usuário';
     }
   };
@@ -161,7 +134,6 @@ const Usuarios = () => {
   const getRoleVariant = (role: string) => {
     switch (role) {
       case 'admin': return 'default';
-      case 'medico': return 'secondary';
       default: return 'outline';
     }
   };
@@ -184,7 +156,7 @@ const Usuarios = () => {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Gestão de Usuários</h1>
           <p className="text-muted-foreground">
-            Gerencie usuários, permissões e empresas do sistema
+            Gerencie usuários e permissões do sistema
           </p>
         </div>
         <Button 
@@ -192,7 +164,6 @@ const Usuarios = () => {
             setEditingProfile(null);
             setIsDialogOpen(true);
           }}
-          className="bg-blue-600 hover:bg-blue-700"
         >
           <Plus className="mr-2 h-4 w-4" />
           Novo Usuário
@@ -201,110 +172,102 @@ const Usuarios = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <UserCheck className="h-5 w-5" />
-            Lista de Usuários
-          </CardTitle>
+          <CardTitle>Usuários do Sistema</CardTitle>
           <CardDescription>
-            Total de {profiles.length} usuários cadastrados no sistema
+            Lista de todos os usuários cadastrados no sistema
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center space-x-2 mb-6">
-            <Search className="h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar usuários por nome ou email..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="max-w-sm"
-            />
+          <div className="mb-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Pesquisar usuários..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
           </div>
 
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Usuário</TableHead>
-                  <TableHead>E-mail</TableHead>
-                  <TableHead>Telefone</TableHead>
-                  <TableHead>Papel/Permissão</TableHead>
-                  <TableHead>Empresas</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredProfiles.length === 0 ? (
+          {filteredProfiles.length === 0 ? (
+            <div className="text-center py-8">
+              <User className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500 font-medium">Nenhum usuário encontrado</p>
+              <p className="text-gray-400 text-sm">
+                {searchTerm ? 'Tente ajustar os filtros de busca' : 'Comece adicionando seu primeiro usuário'}
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                      {searchTerm ? 'Nenhum usuário encontrado.' : 'Nenhum usuário cadastrado.'}
-                    </TableCell>
+                    <TableHead>Nome</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Papel</TableHead>
+                    <TableHead>Telefone</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
-                ) : (
-                  filteredProfiles.map((userProfile) => (
+                </TableHeader>
+                <TableBody>
+                  {filteredProfiles.map((userProfile) => (
                     <TableRow key={userProfile.id}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          {getRoleIcon(userProfile.role)}
-                          <span>{userProfile.nome}</span>
-                          {userProfile.id === profile?.id && (
-                            <Badge variant="outline" className="text-xs">Você</Badge>
-                          )}
-                        </div>
-                      </TableCell>
+                      <TableCell className="font-medium">{userProfile.nome}</TableCell>
                       <TableCell>{userProfile.email}</TableCell>
-                      <TableCell>{userProfile.telefone || '-'}</TableCell>
                       <TableCell>
-                        <Badge variant={getRoleVariant(userProfile.role)}>
+                        <Badge variant={getRoleVariant(userProfile.role) as any} className="flex items-center gap-1 w-fit">
+                          {getRoleIcon(userProfile.role)}
                           {getRoleBadge(userProfile.role)}
                         </Badge>
                       </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {userProfile.role === 'admin' ? (
-                            <Badge variant="secondary" className="text-xs">Todas</Badge>
-                          ) : (
-                            userProfile.user_empresas?.map((ue, index) => (
-                              <Badge key={index} variant="outline" className="text-xs">
-                                {ue.empresas.nome}
-                              </Badge>
-                            )) || <span className="text-muted-foreground text-sm">Nenhuma</span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="bg-green-100 text-green-800">
-                          Ativo
-                        </Badge>
-                      </TableCell>
+                      <TableCell>{userProfile.telefone || '-'}</TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end space-x-2">
+                        <div className="flex items-center justify-end gap-2">
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => handleEdit(userProfile)}
-                            title="Editar usuário"
                           >
                             <Edit2 className="h-4 w-4" />
                           </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDelete(userProfile)}
-                            disabled={userProfile.id === profile?.id}
-                            title={userProfile.id === profile?.id ? "Não é possível deletar seu próprio usuário" : "Deletar usuário"}
-                            className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={userProfile.id === profile?.id}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Remover Usuário</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Tem certeza que deseja remover o usuário "{userProfile.nome}"? 
+                                  Esta ação não pode ser desfeita.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction 
+                                  onClick={() => handleDelete(userProfile)}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  Remover
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
 

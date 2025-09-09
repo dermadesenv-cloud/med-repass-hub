@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { Eye, EyeOff } from "lucide-react";
 
 interface Profile {
   id: string;
@@ -14,8 +15,7 @@ interface Profile {
   nome: string;
   email: string;
   telefone: string | null;
-  role: 'admin' | 'usuario' | 'medico';
-  empresa_id: string | null;
+  role: 'admin' | 'usuario';
   created_at: string;
   updated_at: string;
 }
@@ -35,11 +35,12 @@ export const UserForm: React.FC<UserFormProps> = ({
 }) => {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     nome: editingProfile?.nome || '',
     email: editingProfile?.email || '',
     telefone: editingProfile?.telefone || '',
-    role: editingProfile?.role || 'usuario' as 'admin' | 'usuario' | 'medico',
+    role: editingProfile?.role || 'usuario' as 'admin' | 'usuario',
     password: ''
   });
 
@@ -87,32 +88,52 @@ export const UserForm: React.FC<UserFormProps> = ({
           description: "Os dados do usuário foram atualizados com sucesso.",
         });
       } else {
-        // Criar novo usuário
-        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        // Criar novo usuário usando signUp normal
+        const redirectUrl = `${window.location.origin}/`;
+        
+        const { data: authData, error: authError } = await supabase.auth.signUp({
           email: formData.email,
           password: formData.password,
-          email_confirm: true
+          options: {
+            emailRedirectTo: redirectUrl,
+            data: {
+              nome: formData.nome,
+            }
+          }
         });
 
-        if (authError) throw authError;
+        if (authError) {
+          if (authError.message.includes('already registered')) {
+            toast({
+              title: "Erro",
+              description: "Este email já está cadastrado no sistema.",
+              variant: "destructive"
+            });
+          } else {
+            throw authError;
+          }
+          return;
+        }
 
-        // Criar perfil
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert([{
-            user_id: authData.user.id,
-            nome: formData.nome,
-            email: formData.email,
-            telefone: formData.telefone,
-            role: formData.role
-          }]);
+        if (authData.user) {
+          // Criar o perfil do usuário
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .insert([{
+              user_id: authData.user.id,
+              nome: formData.nome,
+              email: formData.email,
+              telefone: formData.telefone || null,
+              role: formData.role
+            }]);
 
-        if (profileError) throw profileError;
+          if (profileError) throw profileError;
 
-        toast({
-          title: "Usuário cadastrado",
-          description: "Novo usuário foi cadastrado com sucesso.",
-        });
+          toast({
+            title: "Usuário cadastrado",
+            description: "Novo usuário foi cadastrado com sucesso.",
+          });
+        }
       }
 
       onSuccess();
@@ -175,24 +196,38 @@ export const UserForm: React.FC<UserFormProps> = ({
           {!editingProfile && (
             <div className="space-y-2">
               <Label htmlFor="password">Senha</Label>
-              <Input
-                id="password"
-                type="password"
-                value={formData.password}
-                onChange={(e) => setFormData({...formData, password: e.target.value})}
-                required
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  value={formData.password}
+                  onChange={(e) => setFormData({...formData, password: e.target.value})}
+                  required
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
             </div>
           )}
           <div className="space-y-2">
             <Label htmlFor="role">Papel</Label>
-            <Select value={formData.role} onValueChange={(value: 'admin' | 'usuario' | 'medico') => setFormData({...formData, role: value})}>
+            <Select value={formData.role} onValueChange={(value: 'admin' | 'usuario') => setFormData({...formData, role: value})}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="usuario">Usuário</SelectItem>
-                <SelectItem value="medico">Médico</SelectItem>
                 <SelectItem value="admin">Administrador</SelectItem>
               </SelectContent>
             </Select>
