@@ -116,18 +116,27 @@ export const UserForm: React.FC<UserFormProps> = ({
         }
 
         if (authData.user) {
-          // Criar o perfil do usuário
-          const { error: profileError } = await supabase
+          // Verificar se já existe um perfil para este usuário
+          const { data: existingProfile } = await supabase
             .from('profiles')
-            .insert([{
-              user_id: authData.user.id,
-              nome: formData.nome,
-              email: formData.email,
-              telefone: formData.telefone || null,
-              role: formData.role
-            }]);
+            .select('id')
+            .eq('user_id', authData.user.id)
+            .single();
 
-          if (profileError) throw profileError;
+          if (!existingProfile) {
+            // Criar o perfil do usuário apenas se não existir
+            const { error: profileError } = await supabase
+              .from('profiles')
+              .insert([{
+                user_id: authData.user.id,
+                nome: formData.nome,
+                email: formData.email,
+                telefone: formData.telefone || null,
+                role: formData.role
+              }]);
+
+            if (profileError) throw profileError;
+          }
 
           toast({
             title: "Usuário cadastrado",
