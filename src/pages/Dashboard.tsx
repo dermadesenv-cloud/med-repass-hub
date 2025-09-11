@@ -7,33 +7,116 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Button } from '@/components/ui/button';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { CalendarIcon, TrendingUp, Users, FileText, DollarSign, Activity } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, startOfDay, endOfDay, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useAuth } from '@/context/AuthContext';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 const Dashboard = () => {
   const [dateRange, setDateRange] = useState({ from: new Date(), to: new Date() });
   const [selectedPeriod, setSelectedPeriod] = useState('mes');
   const { user } = useAuth();
 
-  // Dados simulados
-  const procedureData = [
-    { name: 'Consultas', value: 125, revenue: 15000 },
-    { name: 'Exames', value: 89, revenue: 12500 },
-    { name: 'Cirurgias', value: 45, revenue: 35000 },
-    { name: 'Procedimentos', value: 67, revenue: 8750 },
-  ];
+  // Função para obter as datas baseadas no período selecionado
+  const getDateRange = () => {
+    const today = new Date();
+    switch (selectedPeriod) {
+      case 'dia':
+        return { start: startOfDay(today), end: endOfDay(today) };
+      case 'mes':
+        return { start: startOfMonth(today), end: endOfMonth(today) };
+      default:
+        return { start: startOfDay(today), end: endOfDay(today) };
+    }
+  };
 
-  const monthlyData = [
-    { month: 'Jan', procedures: 234, revenue: 28500 },
-    { month: 'Fev', procedures: 287, revenue: 34200 },
-    { month: 'Mar', procedures: 356, revenue: 42800 },
-    { month: 'Abr', procedures: 298, revenue: 38600 },
-    { month: 'Mai', procedures: 326, revenue: 41200 },
-    { month: 'Jun', procedures: 382, revenue: 48900 },
-  ];
+  const { start: startDate, end: endDate } = getDateRange();
+
+  // Query para contagem de procedimentos hoje
+  const { data: todayStats } = useQuery({
+    queryKey: ['dashboard-today-stats', startOfDay(new Date()).toISOString()],
+    queryFn: async () => {
+      const today = startOfDay(new Date());
+      const tomorrow = endOfDay(new Date());
+      
+      const { data, error } = await supabase
+        .from('lancamentos')
+        .select('valor_total')
+        .gte('data_lancamento', today.toISOString().split('T')[0])
+        .lte('data_lancamento', tomorrow.toISOString().split('T')[0]);
+
+      if (error) throw error;
+
+      return {
+        count: data?.length || 0,
+        total: data?.reduce((sum, item) => sum + Number(item.valor_total || 0), 0) || 0
+      };
+    },
+    enabled: !!user
+  });
+
+  // Query para contagem de procedimentos do mês
+  const { data: monthStats } = useQuery({
+    queryKey: ['dashboard-month-stats', startOfMonth(new Date()).toISOString()],
+    queryFn: async () => {
+      const startMonth = startOfMonth(new Date());
+      const endMonth = endOfMonth(new Date());
+      
+      const { data, error } = await supabase
+        .from('lancamentos')
+        .select('valor_total')
+        .gte('data_lancamento', startMonth.toISOString().split('T')[0])
+        .lte('data_lancamento', endMonth.toISOString().split('T')[0]);
+
+      if (error) throw error;
+
+      return {
+        count: data?.length || 0,
+        total: data?.reduce((sum, item) => sum + Number(item.valor_total || 0), 0) || 0
+      };
+    },
+    enabled: !!user
+  });
+
+  // Query para dados de procedimentos por tipo (baseado em lançamentos reais)
+  const { data: procedureData = [] } = useQuery({
+    queryKey: ['dashboard-procedure-data'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('lancamento_itens')
+        .select(`
+          quantidade,
+          valor_total,
+          procedimentos (nome, categoria)
+        `);
+
+      if (error) throw error;
+
+      // Agrupar por categoria de procedimento
+      const grouped = data?.reduce((acc: any, item: any) => {
+        const categoria = item.procedimentos?.categoria || 'Outros';
+        if (!acc[categoria]) {
+          acc[categoria] = { name: categoria, value: 0, revenue: 0 };
+        }
+        acc[categoria].value += item.quantidade || 0;
+        acc[categoria].revenue += Number(item.valor_total || 0);
+        return acc;
+      }, {});
+
+      return Object.values(grouped || {});
+    },
+    enabled: !!user
+  });
 
   const COLORS = ['hsl(210, 100%, 70%)', 'hsl(280, 50%, 70%)', 'hsl(240, 60%, 75%)', 'hsl(200, 80%, 75%)'];
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(value);
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -83,8 +166,8 @@ const Dashboard = () => {
             <Activity className="h-4 w-4" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">23</div>
-            <p className="text-xs opacity-80">+12% em relação a ontem</p>
+            <div className="text-2xl font-bold">{todayStats?.count || 0}</div>
+            <p className="text-xs opacity-80">Procedimentos realizados hoje</p>
           </CardContent>
         </Card>
 
@@ -94,8 +177,8 @@ const Dashboard = () => {
             <DollarSign className="h-4 w-4" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">R$ 3.240</div>
-            <p className="text-xs opacity-80">+8% em relação a ontem</p>
+            <div className="text-2xl font-bold">{formatCurrency(todayStats?.total || 0)}</div>
+            <p className="text-xs opacity-80">Receita gerada hoje</p>
           </CardContent>
         </Card>
 
@@ -105,8 +188,8 @@ const Dashboard = () => {
             <FileText className="h-4 w-4" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">382</div>
-            <p className="text-xs opacity-80">+15% em relação ao mês passado</p>
+            <div className="text-2xl font-bold">{monthStats?.count || 0}</div>
+            <p className="text-xs opacity-80">Procedimentos realizados este mês</p>
           </CardContent>
         </Card>
 
@@ -116,8 +199,8 @@ const Dashboard = () => {
             <TrendingUp className="h-4 w-4" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">R$ 48.900</div>
-            <p className="text-xs opacity-80">+18% em relação ao mês passado</p>
+            <div className="text-2xl font-bold">{formatCurrency(monthStats?.total || 0)}</div>
+            <p className="text-xs opacity-80">Receita gerada este mês</p>
           </CardContent>
         </Card>
       </div>
@@ -154,39 +237,28 @@ const Dashboard = () => {
 
         <Card className="bg-white/80 backdrop-blur-sm border-white/20 shadow-lg">
           <CardHeader>
-            <CardTitle className="text-primary">Evolução Mensal</CardTitle>
-            <CardDescription>Procedimentos e receita ao longo dos meses</CardDescription>
+            <CardTitle className="text-primary">Resumo de Dados</CardTitle>
+            <CardDescription>Informações gerais do sistema</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={monthlyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(210, 100%, 90%)" />
-                <XAxis dataKey="month" stroke="hsl(210, 100%, 60%)" />
-                <YAxis stroke="hsl(210, 100%, 60%)" />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: 'white', 
-                    border: '1px solid hsl(210, 100%, 80%)',
-                    borderRadius: '8px'
-                  }} 
-                />
-                <Legend />
-                <Line 
-                  type="monotone" 
-                  dataKey="procedures" 
-                  stroke="hsl(210, 100%, 70%)" 
-                  strokeWidth={3}
-                  name="Procedimentos"
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="revenue" 
-                  stroke="hsl(280, 50%, 70%)" 
-                  strokeWidth={3}
-                  name="Receita (R$)"
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center p-3 bg-primary/5 rounded-lg">
+                <span className="text-sm font-medium">Total de Procedimentos Registrados</span>
+                <span className="text-lg font-bold text-primary">{monthStats?.count || 0}</span>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-secondary/5 rounded-lg">
+                <span className="text-sm font-medium">Receita Total do Mês</span>
+                <span className="text-lg font-bold text-secondary">{formatCurrency(monthStats?.total || 0)}</span>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-accent/5 rounded-lg">
+                <span className="text-sm font-medium">Procedimentos Hoje</span>
+                <span className="text-lg font-bold text-accent">{todayStats?.count || 0}</span>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-primary/5 rounded-lg">
+                <span className="text-sm font-medium">Receita Hoje</span>
+                <span className="text-lg font-bold text-primary">{formatCurrency(todayStats?.total || 0)}</span>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
