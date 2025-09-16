@@ -20,6 +20,10 @@ interface Profile {
   role: 'admin' | 'usuario';
   created_at: string;
   updated_at: string;
+  empresas?: Array<{
+    id: string;
+    nome: string;
+  }>;
 }
 
 const Usuarios = () => {
@@ -34,6 +38,7 @@ const Usuarios = () => {
     try {
       console.log('Fetching profiles as admin:', isAdmin);
       
+      // Buscar perfis
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
         .select('*')
@@ -43,11 +48,37 @@ const Usuarios = () => {
         throw profilesError;
       }
 
-      // Filter out 'medico' roles and type cast properly
-      const filteredProfiles = profilesData?.filter(p => p.role !== 'medico').map(p => ({
-        ...p,
-        role: p.role as 'admin' | 'usuario'
-      })) || [];
+      // Buscar empresas vinculadas para cada usuário
+      const profilesWithEmpresas = await Promise.all(
+        profilesData?.map(async (profile) => {
+          if (profile.role === 'admin') {
+            return {
+              ...profile,
+              role: profile.role as 'admin' | 'usuario',
+              empresas: []
+            };
+          }
+
+          const { data: userEmpresas } = await supabase
+            .from('user_empresas')
+            .select(`
+              empresas (
+                id,
+                nome
+              )
+            `)
+            .eq('user_id', profile.user_id);
+
+          return {
+            ...profile,
+            role: profile.role as 'admin' | 'usuario',
+            empresas: userEmpresas?.map((ue: any) => ue.empresas).filter(Boolean) || []
+          };
+        }) || []
+      );
+
+      // No need to filter medico since our interface only allows admin | usuario
+      const filteredProfiles = profilesWithEmpresas;
       
       console.log('Profiles data:', filteredProfiles);
       setProfiles(filteredProfiles);
@@ -206,6 +237,7 @@ const Usuarios = () => {
                     <TableHead>Nome</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Papel</TableHead>
+                    <TableHead>Empresas</TableHead>
                     <TableHead>Telefone</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
@@ -220,6 +252,21 @@ const Usuarios = () => {
                           {getRoleIcon(userProfile.role)}
                           {getRoleBadge(userProfile.role)}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {userProfile.role === 'admin' ? (
+                          <Badge variant="outline" className="text-xs">Todas as empresas</Badge>
+                        ) : userProfile.empresas && userProfile.empresas.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {userProfile.empresas.map((empresa) => (
+                              <Badge key={empresa.id} variant="secondary" className="text-xs">
+                                {empresa.nome}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : (
+                          <Badge variant="destructive" className="text-xs">Sem empresas</Badge>
+                        )}
                       </TableCell>
                       <TableCell>{userProfile.telefone || '-'}</TableCell>
                       <TableCell className="text-right">
