@@ -25,25 +25,25 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-gradient-to-br from-blue-50 to-purple-50">
+      <div className="min-h-screen flex w-full bg-background">
         <AppSidebar />
         <div className="flex-1 flex flex-col">
-          <header className="h-16 flex items-center justify-end px-6 bg-blue-50 shadow-sm border-b border-blue-200">
+          <header className="h-16 flex items-center justify-end px-6 bg-background border-b">
             <div className="flex items-center gap-4">
-              <span className="text-sm text-blue-800 font-medium">
+              <span className="text-sm text-foreground font-medium">
                 Bem-vindo, {profile?.nome || user?.email}
               </span>
               <div className="flex items-center gap-2">
                 <button 
                   onClick={handleUserInfoClick}
-                  className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold shadow-md hover:bg-blue-700 transition-colors"
+                  className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold shadow-md hover:bg-primary/90 transition-colors"
                   title={`Usuário: ${profile?.nome || user?.email} (${profile?.role || 'carregando...'})`}
                 >
                   {(profile?.nome || user?.email || 'U').charAt(0).toUpperCase()}
                 </button>
                 <button 
                   onClick={signOut}
-                  className="text-sm text-blue-600 hover:text-blue-800 underline"
+                  className="text-sm text-primary hover:text-primary/80 underline"
                   title="Fazer logout"
                 >
                   Sair
@@ -51,7 +51,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               </div>
             </div>
           </header>
-          <main className="flex-1 p-6 bg-gray-50">
+          <main className="flex-1 p-6 bg-background">
             <div className="max-w-7xl mx-auto">
               {children}
             </div>
