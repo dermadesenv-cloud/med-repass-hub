@@ -22,36 +22,7 @@ interface Usuario {
 }
 
 const Pagamentos = () => {
-  const [usuarios, setUsuarios] = useState<Usuario[]>([
-    {
-      id: '1',
-      nome: 'Dr. João Silva',
-      email: 'joao@clinica.com',
-      token: 'TOKEN123',
-      isPaid: true,
-      paymentDate: '2024-01-15',
-      expiryDate: '2024-02-15',
-      planType: 'premium'
-    },
-    {
-      id: '2',
-      nome: 'Dra. Maria Santos',
-      email: 'maria@clinica.com',
-      token: 'TOKEN456',
-      isPaid: false,
-      planType: 'basic'
-    },
-    {
-      id: '3',
-      nome: 'Dr. Pedro Costa',
-      email: 'pedro@hospital.com',
-      token: 'TOKEN789',
-      isPaid: true,
-      paymentDate: '2024-01-10',
-      expiryDate: '2024-02-10',
-      planType: 'basic'
-    }
-  ]);
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isTokenDialogOpen, setIsTokenDialogOpen] = useState(false);

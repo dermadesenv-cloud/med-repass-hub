@@ -55,7 +55,7 @@ const Procedimentos = () => {
     categoria: ''
   });
 
-  const categorias = ['Consulta', 'Exame', 'Cirurgia', 'Procedimento', 'Internação'];
+  const categorias: string[] = [];
 
   // Buscar empresas ativas (apenas as permitidas para usuários não admin)
   const { data: empresas = [] } = useQuery({

@@ -52,10 +52,7 @@ const Medicos = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const especialidades = [
-    'Cardiologia', 'Dermatologia', 'Neurologia', 'Ortopedia', 
-    'Pediatria', 'Ginecologia', 'Oftalmologia', 'Psiquiatria'
-  ];
+  const especialidades: string[] = [];
 
   // Buscar médicos com filtro por empresa
   const { data: medicos = [], isLoading: loadingMedicos } = useQuery({
