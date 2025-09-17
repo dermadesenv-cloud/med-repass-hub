@@ -399,7 +399,10 @@ const Lancamentos = () => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-primary">Lançamentos</h1>
+        <div>
+          <h1 className="text-3xl font-bold text-primary">Lançamentos</h1>
+          <p className="text-muted-foreground mt-2">Lançamentos de Procedimentos e consultas executadas</p>
+        </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button onClick={() => setEditingLancamento(null)}>
