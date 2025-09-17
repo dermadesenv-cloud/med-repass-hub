@@ -14,24 +14,20 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
-
 interface Empresa {
   id: string;
   nome: string;
 }
-
 interface Medico {
   id: string;
   nome: string;
   crm: string;
 }
-
 interface Procedimento {
   id: string;
   nome: string;
   valor: number;
 }
-
 interface LancamentoItem {
   id?: string;
   lancamento_id?: string;
@@ -40,7 +36,6 @@ interface LancamentoItem {
   valor_unitario: number;
   valor_total: number;
 }
-
 interface Lancamento {
   id: string;
   medico_id: string;
@@ -51,11 +46,20 @@ interface Lancamento {
   created_at: string;
   updated_at: string;
   created_by: string;
-  empresas: { nome: string } | { nome: string }[];
-  medicos: { nome: string; crm: string } | { nome: string; crm: string }[];
+  empresas: {
+    nome: string;
+  } | {
+    nome: string;
+  }[];
+  medicos: {
+    nome: string;
+    crm: string;
+  } | {
+    nome: string;
+    crm: string;
+  }[];
   itens?: LancamentoItem[];
 }
-
 const Lancamentos = () => {
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
@@ -64,17 +68,20 @@ const Lancamentos = () => {
   const [loading, setLoading] = useState(true);
   const [editingLancamento, setEditingLancamento] = useState<Lancamento | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  
-  const { user, profile, isAdmin } = useAuth();
-  const { toast } = useToast();
-  
+  const {
+    user,
+    profile,
+    isAdmin
+  } = useAuth();
+  const {
+    toast
+  } = useToast();
   const [formData, setFormData] = useState({
     medico_id: '',
     empresa_id: '',
     data_lancamento: new Date().toISOString().split('T')[0],
     observacoes: ''
   });
-
   const [itensLancamento, setItensLancamento] = useState<LancamentoItem[]>([{
     procedimento_id: '',
     quantidade: 1,
@@ -84,20 +91,16 @@ const Lancamentos = () => {
 
   // Fix the empresa_id access - use profile instead of userProfile
   const userEmpresaId = isAdmin ? null : profile?.empresa_id;
-
   useEffect(() => {
     fetchLancamentos();
     fetchEmpresas();
     fetchMedicos();
     fetchProcedimentos();
   }, []);
-
   const fetchLancamentos = async () => {
     try {
       setLoading(true);
-      let query = supabase
-        .from('lancamentos')
-        .select(`
+      let query = supabase.from('lancamentos').select(`
           *,
           empresas!inner(nome),
           medicos!inner(nome, crm)
@@ -107,9 +110,12 @@ const Lancamentos = () => {
       if (!isAdmin && userEmpresaId) {
         query = query.eq('empresa_id', userEmpresaId);
       }
-
-      const { data, error } = await query.order('created_at', { ascending: false });
-
+      const {
+        data,
+        error
+      } = await query.order('created_at', {
+        ascending: false
+      });
       if (error) {
         console.error('Erro ao buscar lançamentos:', error);
         toast({
@@ -126,7 +132,6 @@ const Lancamentos = () => {
         empresas: Array.isArray(item.empresas) ? item.empresas[0] : item.empresas,
         medicos: Array.isArray(item.medicos) ? item.medicos[0] : item.medicos
       }));
-
       setLancamentos(transformedData);
     } catch (error) {
       console.error('Erro ao buscar lançamentos:', error);
@@ -139,69 +144,57 @@ const Lancamentos = () => {
       setLoading(false);
     }
   };
-
   const fetchEmpresas = async () => {
     try {
-      const { data, error } = await supabase
-        .from('empresas')
-        .select('*')
-        .order('nome');
-
+      const {
+        data,
+        error
+      } = await supabase.from('empresas').select('*').order('nome');
       if (error) {
         console.error('Erro ao buscar empresas:', error);
         return;
       }
-
       setEmpresas(data || []);
     } catch (error) {
       console.error('Erro ao buscar empresas:', error);
     }
   };
-
   const fetchMedicos = async () => {
     try {
-      let query = supabase
-        .from('medicos')
-        .select('*');
-
+      let query = supabase.from('medicos').select('*');
       if (!isAdmin && userEmpresaId) {
         query = query.eq('empresa_id', userEmpresaId);
       }
-
-      const { data, error } = await query.order('nome');
-
+      const {
+        data,
+        error
+      } = await query.order('nome');
       if (error) {
         console.error('Erro ao buscar médicos:', error);
         return;
       }
-
       setMedicos(data || []);
     } catch (error) {
       console.error('Erro ao buscar médicos:', error);
     }
   };
-
   const fetchProcedimentos = async () => {
     try {
-      const { data, error } = await supabase
-        .from('procedimentos')
-        .select('*')
-        .order('nome');
-
+      const {
+        data,
+        error
+      } = await supabase.from('procedimentos').select('*').order('nome');
       if (error) {
         console.error('Erro ao buscar procedimentos:', error);
         return;
       }
-
       setProcedimentos(data || []);
     } catch (error) {
       console.error('Erro ao buscar procedimentos:', error);
     }
   };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!user) {
       toast({
         title: "Erro de autenticação",
@@ -210,33 +203,26 @@ const Lancamentos = () => {
       });
       return;
     }
-
     try {
       const valorTotal = itensLancamento.reduce((sum, item) => sum + item.valor_total, 0);
-      
       const lancamentoData = {
         ...formData,
         valor_total: valorTotal,
         created_by: user.id
       };
-
       if (editingLancamento) {
         // Atualizar lançamento existente
-        const { error: lancamentoError } = await supabase
-          .from('lancamentos')
-          .update(lancamentoData)
-          .eq('id', editingLancamento.id);
-
+        const {
+          error: lancamentoError
+        } = await supabase.from('lancamentos').update(lancamentoData).eq('id', editingLancamento.id);
         if (lancamentoError) {
           throw lancamentoError;
         }
 
         // Deletar itens antigos
-        const { error: deleteError } = await supabase
-          .from('lancamento_itens')
-          .delete()
-          .eq('lancamento_id', editingLancamento.id);
-
+        const {
+          error: deleteError
+        } = await supabase.from('lancamento_itens').delete().eq('lancamento_id', editingLancamento.id);
         if (deleteError) {
           throw deleteError;
         }
@@ -246,27 +232,22 @@ const Lancamentos = () => {
           ...item,
           lancamento_id: editingLancamento.id
         }));
-
-        const { error: itensError } = await supabase
-          .from('lancamento_itens')
-          .insert(itensData);
-
+        const {
+          error: itensError
+        } = await supabase.from('lancamento_itens').insert(itensData);
         if (itensError) {
           throw itensError;
         }
-
         toast({
           title: "Lançamento atualizado",
           description: "Lançamento atualizado com sucesso!"
         });
       } else {
         // Criar novo lançamento
-        const { data: lancamentoResult, error: lancamentoError } = await supabase
-          .from('lancamentos')
-          .insert([lancamentoData])
-          .select()
-          .single();
-
+        const {
+          data: lancamentoResult,
+          error: lancamentoError
+        } = await supabase.from('lancamentos').insert([lancamentoData]).select().single();
         if (lancamentoError) {
           throw lancamentoError;
         }
@@ -276,15 +257,12 @@ const Lancamentos = () => {
           ...item,
           lancamento_id: lancamentoResult.id
         }));
-
-        const { error: itensError } = await supabase
-          .from('lancamento_itens')
-          .insert(itensData);
-
+        const {
+          error: itensError
+        } = await supabase.from('lancamento_itens').insert(itensData);
         if (itensError) {
           throw itensError;
         }
-
         toast({
           title: "Lançamento criado",
           description: "Lançamento criado com sucesso!"
@@ -306,7 +284,6 @@ const Lancamentos = () => {
       }]);
       setEditingLancamento(null);
       setIsDialogOpen(false);
-      
       await fetchLancamentos();
     } catch (error) {
       console.error('Erro ao salvar lançamento:', error);
@@ -317,7 +294,6 @@ const Lancamentos = () => {
       });
     }
   };
-
   const handleEdit = (lancamento: Lancamento) => {
     setEditingLancamento(lancamento);
     setFormData({
@@ -326,31 +302,25 @@ const Lancamentos = () => {
       data_lancamento: lancamento.data_lancamento,
       observacoes: lancamento.observacoes
     });
-    
+
     // Load existing items if available
     if (lancamento.itens && lancamento.itens.length > 0) {
       setItensLancamento(lancamento.itens);
     }
-    
     setIsDialogOpen(true);
   };
-
   const handleDelete = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('lancamentos')
-        .delete()
-        .eq('id', id);
-
+      const {
+        error
+      } = await supabase.from('lancamentos').delete().eq('id', id);
       if (error) {
         throw error;
       }
-
       toast({
         title: "Lançamento excluído",
         description: "Lançamento excluído com sucesso!"
       });
-
       await fetchLancamentos();
     } catch (error) {
       console.error('Erro ao excluir lançamento:', error);
@@ -361,7 +331,6 @@ const Lancamentos = () => {
       });
     }
   };
-
   const addItem = () => {
     setItensLancamento([...itensLancamento, {
       procedimento_id: '',
@@ -370,38 +339,32 @@ const Lancamentos = () => {
       valor_total: 0
     }]);
   };
-
   const removeItem = (index: number) => {
     if (itensLancamento.length > 1) {
       setItensLancamento(itensLancamento.filter((_, i) => i !== index));
     }
   };
-
   const updateItem = (index: number, field: keyof LancamentoItem, value: string | number) => {
     const newItens = [...itensLancamento];
-    newItens[index] = { ...newItens[index], [field]: value };
-    
+    newItens[index] = {
+      ...newItens[index],
+      [field]: value
+    };
     if (field === 'quantidade' || field === 'valor_unitario') {
       newItens[index].valor_total = newItens[index].quantidade * newItens[index].valor_unitario;
     }
-    
     setItensLancamento(newItens);
   };
-
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
+    return <div className="flex items-center justify-center h-64">
         <div className="text-lg">Carregando lançamentos...</div>
-      </div>
-    );
+      </div>;
   }
-
-  return (
-    <div className="space-y-6">
+  return <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-primary">Lançamentos</h1>
-          <p className="text-muted-foreground mt-2">Lançamentos de Procedimentos e consultas executadas</p>
+          <p className="text-muted-foreground mt-2">Lançamentos de Procedimentos e Consultas executadas</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
@@ -421,53 +384,44 @@ const Lancamentos = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="medico_id">Médico</Label>
-                  <Select 
-                    value={formData.medico_id} 
-                    onValueChange={(value) => setFormData({ ...formData, medico_id: value })}
-                  >
+                  <Select value={formData.medico_id} onValueChange={value => setFormData({
+                  ...formData,
+                  medico_id: value
+                })}>
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione um médico" />
                     </SelectTrigger>
                     <SelectContent>
-                      {medicos.map((medico) => (
-                        <SelectItem key={medico.id} value={medico.id}>
+                      {medicos.map(medico => <SelectItem key={medico.id} value={medico.id}>
                           {medico.nome} - CRM: {medico.crm}
-                        </SelectItem>
-                      ))}
+                        </SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
 
-                {isAdmin && (
-                  <div className="space-y-2">
+                {isAdmin && <div className="space-y-2">
                     <Label htmlFor="empresa_id">Empresa</Label>
-                    <Select 
-                      value={formData.empresa_id} 
-                      onValueChange={(value) => setFormData({ ...formData, empresa_id: value })}
-                    >
+                    <Select value={formData.empresa_id} onValueChange={value => setFormData({
+                  ...formData,
+                  empresa_id: value
+                })}>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione uma empresa" />
                       </SelectTrigger>
                       <SelectContent>
-                        {empresas.map((empresa) => (
-                          <SelectItem key={empresa.id} value={empresa.id}>
+                        {empresas.map(empresa => <SelectItem key={empresa.id} value={empresa.id}>
                             {empresa.nome}
-                          </SelectItem>
-                        ))}
+                          </SelectItem>)}
                       </SelectContent>
                     </Select>
-                  </div>
-                )}
+                  </div>}
 
                 <div className="space-y-2">
                   <Label htmlFor="data_lancamento">Data do Lançamento</Label>
-                  <Input
-                    id="data_lancamento"
-                    type="date"
-                    value={formData.data_lancamento}
-                    onChange={(e) => setFormData({ ...formData, data_lancamento: e.target.value })}
-                    required
-                  />
+                  <Input id="data_lancamento" type="date" value={formData.data_lancamento} onChange={e => setFormData({
+                  ...formData,
+                  data_lancamento: e.target.value
+                })} required />
                 </div>
               </div>
 
@@ -480,84 +434,53 @@ const Lancamentos = () => {
                   </Button>
                 </div>
 
-                {itensLancamento.map((item, index) => (
-                  <Card key={index}>
+                {itensLancamento.map((item, index) => <Card key={index}>
                     <CardContent className="p-4">
                       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div className="space-y-2">
                           <Label>Procedimento</Label>
-                          <Select 
-                            value={item.procedimento_id} 
-                            onValueChange={(value) => updateItem(index, 'procedimento_id', value)}
-                          >
+                          <Select value={item.procedimento_id} onValueChange={value => updateItem(index, 'procedimento_id', value)}>
                             <SelectTrigger>
                               <SelectValue placeholder="Selecione" />
                             </SelectTrigger>
                             <SelectContent>
-                              {procedimentos.map((proc) => (
-                                <SelectItem key={proc.id} value={proc.id}>
+                              {procedimentos.map(proc => <SelectItem key={proc.id} value={proc.id}>
                                   {proc.nome} - R$ {proc.valor.toFixed(2)}
-                                </SelectItem>
-                              ))}
+                                </SelectItem>)}
                             </SelectContent>
                           </Select>
                         </div>
 
                         <div className="space-y-2">
                           <Label>Quantidade</Label>
-                          <Input
-                            type="number"
-                            min="1"
-                            value={item.quantidade}
-                            onChange={(e) => updateItem(index, 'quantidade', parseInt(e.target.value) || 1)}
-                          />
+                          <Input type="number" min="1" value={item.quantidade} onChange={e => updateItem(index, 'quantidade', parseInt(e.target.value) || 1)} />
                         </div>
 
                         <div className="space-y-2">
                           <Label>Valor Unitário</Label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={item.valor_unitario}
-                            onChange={(e) => updateItem(index, 'valor_unitario', parseFloat(e.target.value) || 0)}
-                          />
+                          <Input type="number" step="0.01" min="0" value={item.valor_unitario} onChange={e => updateItem(index, 'valor_unitario', parseFloat(e.target.value) || 0)} />
                         </div>
 
                         <div className="space-y-2">
                           <Label>Total</Label>
                           <div className="flex items-center gap-2">
-                            <Input
-                              type="text"
-                              value={`R$ ${item.valor_total.toFixed(2)}`}
-                              disabled
-                            />
-                            {itensLancamento.length > 1 && (
-                              <Button 
-                                type="button" 
-                                variant="destructive" 
-                                size="sm"
-                                onClick={() => removeItem(index)}
-                              >
+                            <Input type="text" value={`R$ ${item.valor_total.toFixed(2)}`} disabled />
+                            {itensLancamento.length > 1 && <Button type="button" variant="destructive" size="sm" onClick={() => removeItem(index)}>
                                 <Trash2 className="h-4 w-4" />
-                              </Button>
-                            )}
+                              </Button>}
                           </div>
                         </div>
                       </div>
                     </CardContent>
-                  </Card>
-                ))}
+                  </Card>)}
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="observacoes">Observações</Label>
-                <Textarea
-                  id="observacoes"
-                  placeholder="Observações adicionais..."
-                  value={formData.observacoes}
-                  onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
-                />
+                <Textarea id="observacoes" placeholder="Observações adicionais..." value={formData.observacoes} onChange={e => setFormData({
+                ...formData,
+                observacoes: e.target.value
+              })} />
               </div>
 
               <div className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
@@ -598,8 +521,7 @@ const Lancamentos = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {lancamentos.map((lancamento) => (
-                <TableRow key={lancamento.id}>
+              {lancamentos.map(lancamento => <TableRow key={lancamento.id}>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Calendar className="h-4 w-4 text-gray-500" />
@@ -611,14 +533,10 @@ const Lancamentos = () => {
                       <User className="h-4 w-4 text-gray-500" />
                       <div>
                         <div className="font-medium">
-                          {typeof lancamento.medicos === 'object' && !Array.isArray(lancamento.medicos) 
-                            ? lancamento.medicos.nome 
-                            : 'Nome não disponível'}
+                          {typeof lancamento.medicos === 'object' && !Array.isArray(lancamento.medicos) ? lancamento.medicos.nome : 'Nome não disponível'}
                         </div>
                         <div className="text-sm text-gray-500">
-                          CRM: {typeof lancamento.medicos === 'object' && !Array.isArray(lancamento.medicos) 
-                            ? lancamento.medicos.crm 
-                            : 'CRM não disponível'}
+                          CRM: {typeof lancamento.medicos === 'object' && !Array.isArray(lancamento.medicos) ? lancamento.medicos.crm : 'CRM não disponível'}
                         </div>
                       </div>
                     </div>
@@ -626,9 +544,7 @@ const Lancamentos = () => {
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Building className="h-4 w-4 text-gray-500" />
-                      {typeof lancamento.empresas === 'object' && !Array.isArray(lancamento.empresas) 
-                        ? lancamento.empresas.nome 
-                        : 'Empresa não disponível'}
+                      {typeof lancamento.empresas === 'object' && !Array.isArray(lancamento.empresas) ? lancamento.empresas.nome : 'Empresa não disponível'}
                     </div>
                   </TableCell>
                   <TableCell>
@@ -646,11 +562,7 @@ const Lancamentos = () => {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEdit(lancamento)}
-                      >
+                      <Button variant="outline" size="sm" onClick={() => handleEdit(lancamento)}>
                         <Edit className="h-4 w-4" />
                       </Button>
                       <AlertDialog>
@@ -676,14 +588,11 @@ const Lancamentos = () => {
                       </AlertDialog>
                     </div>
                   </TableCell>
-                </TableRow>
-              ))}
+                </TableRow>)}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
-    </div>
-  );
+    </div>;
 };
-
 export default Lancamentos;
