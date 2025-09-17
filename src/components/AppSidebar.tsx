@@ -65,8 +65,8 @@ export function AppSidebar() {
 
   return (
     <Sidebar className={isCollapsed ? "w-16" : "w-60"} collapsible="icon">
-      <SidebarContent className="bg-sidebar h-full overflow-hidden">
-        <div className="p-4 border-b bg-sidebar">
+      <SidebarContent className="bg-blue-50 border-r-2 border-blue-200">
+        <div className="p-4 border-b border-blue-200 bg-blue-50">
           <div className="flex items-center justify-center">
             <img 
               src="/lovable-uploads/1f27fba1-1c30-44f2-8802-66b0a90188e8.png" 
@@ -76,12 +76,12 @@ export function AppSidebar() {
           </div>
         </div>
 
-        <SidebarGroup className="px-2 py-4 flex-1 overflow-y-auto">
-          <SidebarGroupLabel className="text-sidebar-foreground font-semibold px-3 py-2 text-sm">
+        <SidebarGroup className="px-2 py-4">
+          <SidebarGroupLabel className="text-blue-800 font-semibold px-3 py-2 text-sm">
             Menu Principal
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu className="space-y-1">
+            <SidebarMenu>
               {filteredItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                    <SidebarMenuButton
