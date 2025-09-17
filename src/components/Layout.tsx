@@ -26,7 +26,7 @@ export const Layout: React.FC<LayoutProps> = ({
       <div className="min-h-screen flex w-full bg-gradient-to-br from-blue-50 to-purple-50">
         <AppSidebar />
         <div className="flex-1 flex flex-col">
-          <header className="h-16 flex items-center justify-end px-6 bg-blue-50 shadow-sm border-b border-blue-200 py-0 my-[9px]">
+          <header className="h-16 flex items-center justify-end bg-blue-50 shadow-sm border-b border-blue-200 py-0 px-[40px] my-[12px]">
             <div className="flex items-center gap-4">
               <span className="text-sm text-blue-800 font-medium">
                 Bem-vindo, {profile?.nome || user?.email}

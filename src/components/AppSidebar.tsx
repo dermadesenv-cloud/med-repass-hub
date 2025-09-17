@@ -77,9 +77,9 @@ export function AppSidebar() {
   console.log('Visible menu items:', filteredItems.map(item => item.title));
   return <Sidebar className={isCollapsed ? "w-14" : "w-64"} collapsible="icon">
       <SidebarContent className="bg-blue-50 border-r-2 border-blue-200 px-[12px] mx-0 my-0 py-0">
-        <div className="p-4 border-b border-blue-200 bg-blue-50">
+        <div className="p-4 border-b border-blue-200 bg-blue-50 py-[10px]">
           <div className="flex items-center justify-center">
-            <img src="/lovable-uploads/1f27fba1-1c30-44f2-8802-66b0a90188e8.png" alt="Logo" className="h-10 w-auto" />
+            <img src="/lovable-uploads/1f27fba1-1c30-44f2-8802-66b0a90188e8.png" alt="Logo" className="h-14 w-auto" />
           </div>
         </div>
 
