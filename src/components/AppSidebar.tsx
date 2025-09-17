@@ -84,28 +84,23 @@ export function AppSidebar() {
             <SidebarMenu>
               {filteredItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location.pathname === item.url}
-                    className="data-[active=true]:!bg-[hsl(var(--sidebar-active))] data-[active=true]:!text-[hsl(var(--sidebar-active-foreground))] data-[active=true]:shadow-lg data-[active=true]:scale-105 data-[active=true]:border-l-4 data-[active=true]:border-l-white/30"
-                  >
-                     <NavLink 
-                       to={item.url} 
-                       className="flex items-center gap-3 px-4 py-3 mx-2 rounded-xl transition-all duration-300 ease-in-out transform"
-                     >
-                       <item.icon className="h-5 w-5 flex-shrink-0 transition-colors duration-300" />
-                       {!isCollapsed && (
-                         <span className="font-medium transition-colors duration-300">
-                           {item.title}
-                         </span>
-                       )}
-                     </NavLink>
-                   </SidebarMenuButton
-                           {item.title}
-                         </span>
-                       )}
-                     </NavLink>
-                  </SidebarMenuButton>
+                   <SidebarMenuButton
+                     asChild
+                     isActive={location.pathname === item.url}
+                     className="data-[active=true]:!bg-[#0f3954] data-[active=true]:!text-white data-[active=true]:shadow-lg data-[active=true]:scale-105 data-[active=true]:border-l-4 data-[active=true]:border-l-white/30"
+                   >
+                      <NavLink 
+                        to={item.url} 
+                        className="flex items-center gap-3 px-4 py-3 mx-2 rounded-xl transition-all duration-300 ease-in-out transform"
+                      >
+                        <item.icon className="h-5 w-5 flex-shrink-0 transition-colors duration-300" />
+                        {!isCollapsed && (
+                          <span className="font-medium transition-colors duration-300">
+                            {item.title}
+                          </span>
+                        )}
+                      </NavLink>
+                    </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>
