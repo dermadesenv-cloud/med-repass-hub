@@ -85,23 +85,23 @@ export function AppSidebar() {
               {filteredItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
-                    <NavLink 
-                      to={item.url} 
-                      className={({ isActive }) => 
-                        `flex items-center gap-3 px-3 py-2.5 mx-2 rounded-lg transition-all duration-200 ${
-                          isActive 
-                            ? 'bg-purple-600 text-white shadow-lg font-semibold' 
-                            : 'text-blue-800 hover:bg-blue-100 hover:shadow-md'
-                        }`
-                      }
-                    >
-                      <item.icon className={`h-5 w-5 flex-shrink-0 ${location.pathname === item.url ? 'text-white' : 'text-blue-800'}`} />
-                      {!isCollapsed && (
-                        <span className={`font-medium ${location.pathname === item.url ? 'text-white' : 'text-blue-800'}`}>
-                          {item.title}
-                        </span>
-                      )}
-                    </NavLink>
+                     <NavLink 
+                       to={item.url} 
+                       className={({ isActive }) => 
+                         `flex items-center gap-3 px-4 py-3 mx-2 rounded-xl transition-all duration-300 ease-in-out transform ${
+                           isActive 
+                             ? 'bg-[hsl(var(--sidebar-active))] text-[hsl(var(--sidebar-active-foreground))] shadow-lg scale-105 border-l-4 border-l-white/30' 
+                             : 'text-blue-800 hover:bg-blue-100/80 hover:shadow-md hover:scale-[1.02] hover:translate-x-1'
+                         }`
+                       }
+                     >
+                       <item.icon className={`h-5 w-5 flex-shrink-0 transition-colors duration-300 ${location.pathname === item.url ? 'text-white' : 'text-blue-800'}`} />
+                       {!isCollapsed && (
+                         <span className={`font-medium transition-colors duration-300 ${location.pathname === item.url ? 'text-white' : 'text-blue-800'}`}>
+                           {item.title}
+                         </span>
+                       )}
+                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}

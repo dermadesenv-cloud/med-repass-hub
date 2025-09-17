@@ -47,6 +47,10 @@ All colors MUST be HSL.
     --sidebar-accent-foreground: 210 100% 20%;
     --sidebar-border: 214 32% 91%;
     --sidebar-ring: 210 100% 50%;
+    
+    /* Custom sidebar selection color */
+    --sidebar-active: 200 74% 20%; /* #0f3954 */
+    --sidebar-active-foreground: 0 0% 100%;
   }
 
   .dark {
@@ -86,6 +90,10 @@ All colors MUST be HSL.
     --sidebar-accent-foreground: 240 5% 96%;
     --sidebar-border: 240 4% 16%;
     --sidebar-ring: 217 91% 60%;
+    
+    /* Custom sidebar selection color for dark mode */
+    --sidebar-active: 200 74% 20%; /* #0f3954 */
+    --sidebar-active-foreground: 0 0% 100%;
   }
 }
 
