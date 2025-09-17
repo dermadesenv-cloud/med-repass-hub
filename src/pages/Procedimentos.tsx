@@ -8,11 +8,12 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, Search, Download, FileText } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, Download, FileText, Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import * as XLSX from 'xlsx';
 
 interface Procedimento {
   id: string;
@@ -42,10 +43,12 @@ const Procedimentos = () => {
   const queryClient = useQueryClient();
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [editingProcedimento, setEditingProcedimento] = useState<Procedimento | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategoria, setSelectedCategoria] = useState<string>('todas');
   const [selectedEmpresa, setSelectedEmpresa] = useState<string>('todas');
+  const [isImporting, setIsImporting] = useState(false);
   
   const [formData, setFormData] = useState({
     nome: '',
@@ -256,6 +259,109 @@ const Procedimentos = () => {
     });
   };
 
+  // Função para baixar modelo Excel
+  const downloadTemplate = () => {
+    const templateData = [
+      {
+        'Nome do Procedimento': 'Consulta Clínica Geral',
+        'Código': 'CON001',
+        'Valor': 150.00,
+        'Categoria': 'Consulta',
+        'Empresa ID': 'ID da empresa (opcional)'
+      },
+      {
+        'Nome do Procedimento': 'Exame de Sangue',
+        'Código': 'EXA001', 
+        'Valor': 80.50,
+        'Categoria': 'Exame',
+        'Empresa ID': ''
+      }
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(templateData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Modelo Procedimentos');
+    XLSX.writeFile(wb, 'modelo_procedimentos.xlsx');
+    
+    toast({
+      title: "Modelo baixado!",
+      description: "Use este arquivo como modelo para importar procedimentos.",
+    });
+  };
+
+  // Mutation para importar procedimentos
+  const importMutation = useMutation({
+    mutationFn: async (procedimentosData: any[]) => {
+      const { error } = await supabase
+        .from('procedimentos')
+        .insert(procedimentosData);
+      if (error) throw error;
+    },
+    onSuccess: (_, data) => {
+      queryClient.invalidateQueries({ queryKey: ['procedimentos'] });
+      toast({
+        title: "Importação concluída!",
+        description: `${data.length} procedimentos foram importados com sucesso.`,
+      });
+      setIsImportDialogOpen(false);
+    },
+    onError: (error) => {
+      console.error('Error importing procedimentos:', error);
+      toast({
+        title: "Erro na importação",
+        description: "Verifique o formato do arquivo e tente novamente.",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Função para processar arquivo Excel
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+      // Processar e validar dados
+      const procedimentosData = jsonData.map((row: any) => ({
+        nome: row['Nome do Procedimento'] || row.nome,
+        codigo: row['Código'] || row.codigo || null,
+        valor: parseFloat(row['Valor'] || row.valor) || 0,
+        categoria: row['Categoria'] || row.categoria || null,
+        empresa_id: row['Empresa ID'] || row.empresa_id || null,
+        status: 'ativo' as const
+      })).filter(item => item.nome && item.valor > 0); // Filtrar apenas itens válidos
+
+      if (procedimentosData.length === 0) {
+        toast({
+          title: "Arquivo inválido",
+          description: "Nenhum procedimento válido encontrado no arquivo.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      importMutation.mutate(procedimentosData);
+    } catch (error) {
+      console.error('Error processing file:', error);
+      toast({
+        title: "Erro ao processar arquivo",
+        description: "Verifique se o arquivo está no formato correto.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsImporting(false);
+      // Limpar o input
+      event.target.value = '';
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -264,11 +370,72 @@ const Procedimentos = () => {
           <p className="text-muted-foreground">Gerencie os procedimentos cadastrados no sistema</p>
         </div>
         
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button variant="outline" onClick={exportCSV}>
             <Download className="mr-2 h-4 w-4" />
             Exportar CSV
           </Button>
+          
+          <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Upload className="mr-2 h-4 w-4" />
+                Importar Excel
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Importar Procedimentos</DialogTitle>
+                <DialogDescription>
+                  Faça upload de um arquivo Excel com os procedimentos para importar em lote.
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="space-y-4">
+                <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center">
+                  <Upload className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Selecione um arquivo Excel (.xlsx) com os procedimentos
+                  </p>
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={handleFileUpload}
+                    disabled={isImporting}
+                    className="hidden"
+                    id="excel-upload"
+                  />
+                  <label
+                    htmlFor="excel-upload"
+                    className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 cursor-pointer"
+                  >
+                    {isImporting ? 'Processando...' : 'Selecionar Arquivo'}
+                  </label>
+                </div>
+                
+                <div className="text-sm text-muted-foreground">
+                  <h4 className="font-medium mb-2">Formato esperado:</h4>
+                  <ul className="list-disc list-inside space-y-1">
+                    <li>Nome do Procedimento (obrigatório)</li>
+                    <li>Código (opcional)</li>
+                    <li>Valor (obrigatório, em números)</li>
+                    <li>Categoria (opcional)</li>
+                    <li>Empresa ID (opcional)</li>
+                  </ul>
+                </div>
+                
+                <div className="flex justify-between pt-4">
+                  <Button variant="outline" onClick={downloadTemplate}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Baixar Modelo
+                  </Button>
+                  <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>
+                    Fechar
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
           
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
