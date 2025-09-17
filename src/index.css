@@ -49,7 +49,7 @@ All colors MUST be HSL.
     --sidebar-ring: 210 100% 50%;
     
     /* Custom sidebar selection color */
-    --sidebar-active: 200 74% 20%; /* #0f3954 */
+    --sidebar-active: 196 69% 20%; /* #0f3954 */
     --sidebar-active-foreground: 0 0% 100%;
   }
 
@@ -92,7 +92,7 @@ All colors MUST be HSL.
     --sidebar-ring: 217 91% 60%;
     
     /* Custom sidebar selection color for dark mode */
-    --sidebar-active: 200 74% 20%; /* #0f3954 */
+    --sidebar-active: 196 69% 20%; /* #0f3954 */
     --sidebar-active-foreground: 0 0% 100%;
   }
 }
