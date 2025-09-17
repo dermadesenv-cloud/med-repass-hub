@@ -134,6 +134,15 @@ export const UserForm: React.FC<UserFormProps> = ({
 
         if (error) throw error;
 
+        // Atualizar senha se fornecida
+        if (formData.password.trim()) {
+          const { error: passwordError } = await supabase.auth.updateUser({
+            password: formData.password
+          });
+          
+          if (passwordError) throw passwordError;
+        }
+
         // Atualizar vinculações com empresas para usuário existente (se não for admin)
         if (formData.role !== 'admin') {
           // Remover vinculações existentes
@@ -159,7 +168,7 @@ export const UserForm: React.FC<UserFormProps> = ({
 
         toast({
           title: "Usuário atualizado",
-          description: "Os dados do usuário foram atualizados com sucesso.",
+          description: `Os dados do usuário foram atualizados com sucesso.${formData.password.trim() ? ' A senha também foi alterada.' : ''}`,
         });
       } else {
         // Criar novo usuário usando signUp normal
@@ -300,6 +309,33 @@ export const UserForm: React.FC<UserFormProps> = ({
                   value={formData.password}
                   onChange={(e) => setFormData({...formData, password: e.target.value})}
                   required
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+          {editingProfile && (
+            <div className="space-y-2">
+              <Label htmlFor="newPassword">Nova Senha (deixe em branco para manter a atual)</Label>
+              <div className="relative">
+                <Input
+                  id="newPassword"
+                  type={showPassword ? "text" : "password"}
+                  value={formData.password}
+                  onChange={(e) => setFormData({...formData, password: e.target.value})}
+                  placeholder="Digite uma nova senha..."
                 />
                 <Button
                   type="button"
