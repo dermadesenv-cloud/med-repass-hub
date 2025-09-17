@@ -185,7 +185,7 @@ const Usuarios = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Gestão de Usuários</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-primary">Gestão de Usuários</h1>
           <p className="text-muted-foreground">
             Gerencie usuários e permissões do sistema
           </p>

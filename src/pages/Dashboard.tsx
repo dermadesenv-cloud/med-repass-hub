@@ -123,7 +123,7 @@ const Dashboard = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-primary">Dashboard</h1>
-          <p className="text-secondary">Visão geral dos seus procedimentos e finanças</p>
+          <p className="text-muted-foreground">Visão geral dos seus procedimentos e finanças</p>
         </div>
         
         <div className="flex gap-2">

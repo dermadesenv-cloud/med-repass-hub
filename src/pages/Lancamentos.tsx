@@ -399,7 +399,7 @@ const Lancamentos = () => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Lançamentos</h1>
+        <h1 className="text-3xl font-bold text-primary">Lançamentos</h1>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button onClick={() => setEditingLancamento(null)}>
