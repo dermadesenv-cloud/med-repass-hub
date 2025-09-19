@@ -49,6 +49,7 @@ const Procedimentos = () => {
   const [selectedCategoria, setSelectedCategoria] = useState<string>('todas');
   const [selectedEmpresa, setSelectedEmpresa] = useState<string>('todas');
   const [isImporting, setIsImporting] = useState(false);
+  const [selectedImportEmpresa, setSelectedImportEmpresa] = useState<string>('');
   
   const [formData, setFormData] = useState({
     nome: '',
@@ -106,12 +107,40 @@ const Procedimentos = () => {
     }
   });
 
+  // Função para gerar código automático
+  const generateNextCode = async (): Promise<string> => {
+    const { data } = await supabase
+      .from('procedimentos')
+      .select('codigo')
+      .not('codigo', 'is', null)
+      .order('codigo', { ascending: false })
+      .limit(1);
+    
+    let nextNumber = 1;
+    if (data && data.length > 0 && data[0].codigo) {
+      const lastCode = data[0].codigo;
+      const match = lastCode.match(/\d+$/);
+      if (match) {
+        nextNumber = parseInt(match[0]) + 1;
+      }
+    }
+    
+    return `PROC${String(nextNumber).padStart(4, '0')}`;
+  };
+
   // Mutation para criar/atualizar procedimento
   const procedimentoMutation = useMutation({
     mutationFn: async (procedimentoData: typeof formData & { id?: string }) => {
+      let codigo = procedimentoData.codigo;
+      
+      // Se não há código e não está editando, gerar automaticamente
+      if (!codigo && !procedimentoData.id) {
+        codigo = await generateNextCode();
+      }
+      
       const dataToSave = {
         nome: procedimentoData.nome,
-        codigo: procedimentoData.codigo || null,
+        codigo: codigo || null,
         valor: parseFloat(procedimentoData.valor),
         empresa_id: procedimentoData.empresa_id || null,
         categoria: procedimentoData.categoria || null,
@@ -264,17 +293,13 @@ const Procedimentos = () => {
     const templateData = [
       {
         'Nome do Procedimento': 'Consulta Clínica Geral',
-        'Código': 'CON001',
         'Valor': 150.00,
-        'Categoria': 'Consulta',
-        'Empresa ID': 'ID da empresa (opcional)'
+        'Categoria': 'Consulta'
       },
       {
         'Nome do Procedimento': 'Exame de Sangue',
-        'Código': 'EXA001', 
         'Valor': 80.50,
-        'Categoria': 'Exame',
-        'Empresa ID': ''
+        'Categoria': 'Exame'
       }
     ];
 
@@ -291,19 +316,35 @@ const Procedimentos = () => {
 
   // Mutation para importar procedimentos
   const importMutation = useMutation({
-    mutationFn: async (procedimentosData: any[]) => {
+    mutationFn: async (data: { procedimentosData: any[], empresaId: string }) => {
+      const { procedimentosData, empresaId } = data;
+      
+      // Gerar códigos automaticamente para cada procedimento
+      const procedimentosComCodigo = [];
+      for (let i = 0; i < procedimentosData.length; i++) {
+        const codigo = await generateNextCode();
+        procedimentosComCodigo.push({
+          ...procedimentosData[i],
+          codigo,
+          empresa_id: empresaId || null
+        });
+      }
+      
       const { error } = await supabase
         .from('procedimentos')
-        .insert(procedimentosData);
+        .insert(procedimentosComCodigo);
       if (error) throw error;
+      
+      return procedimentosComCodigo;
     },
-    onSuccess: (_, data) => {
+    onSuccess: (procedimentosImportados) => {
       queryClient.invalidateQueries({ queryKey: ['procedimentos'] });
       toast({
         title: "Importação concluída!",
-        description: `${data.length} procedimentos foram importados com sucesso.`,
+        description: `${procedimentosImportados.length} procedimentos foram importados com sucesso.`,
       });
       setIsImportDialogOpen(false);
+      setSelectedImportEmpresa('');
     },
     onError: (error) => {
       console.error('Error importing procedimentos:', error);
@@ -319,6 +360,15 @@ const Procedimentos = () => {
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    
+    if (!selectedImportEmpresa) {
+      toast({
+        title: "Selecione uma empresa",
+        description: "É necessário selecionar uma empresa antes de fazer a importação.",
+        variant: "destructive"
+      });
+      return;
+    }
 
     setIsImporting(true);
     
@@ -328,13 +378,11 @@ const Procedimentos = () => {
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
       const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-      // Processar e validar dados
+      // Processar e validar dados (código será gerado automaticamente)
       const procedimentosData = jsonData.map((row: any) => ({
         nome: row['Nome do Procedimento'] || row.nome,
-        codigo: row['Código'] || row.codigo || null,
         valor: parseFloat(row['Valor'] || row.valor) || 0,
         categoria: row['Categoria'] || row.categoria || null,
-        empresa_id: row['Empresa ID'] || row.empresa_id || null,
         status: 'ativo' as const
       })).filter(item => item.nome && item.valor > 0); // Filtrar apenas itens válidos
 
@@ -347,7 +395,10 @@ const Procedimentos = () => {
         return;
       }
 
-      importMutation.mutate(procedimentosData);
+      importMutation.mutate({
+        procedimentosData,
+        empresaId: selectedImportEmpresa
+      });
     } catch (error) {
       console.error('Error processing file:', error);
       toast({
@@ -392,6 +443,20 @@ const Procedimentos = () => {
               </DialogHeader>
               
               <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="empresa-import">Empresa</Label>
+                  <Select value={selectedImportEmpresa} onValueChange={setSelectedImportEmpresa}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione a empresa para os procedimentos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {empresas.map(empresa => (
+                        <SelectItem key={empresa.id} value={empresa.id}>{empresa.nome}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
                 <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center">
                   <Upload className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
                   <p className="text-sm text-muted-foreground mb-4">
@@ -401,13 +466,13 @@ const Procedimentos = () => {
                     type="file"
                     accept=".xlsx,.xls"
                     onChange={handleFileUpload}
-                    disabled={isImporting}
+                    disabled={isImporting || !selectedImportEmpresa}
                     className="hidden"
                     id="excel-upload"
                   />
                   <label
                     htmlFor="excel-upload"
-                    className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 cursor-pointer"
+                    className={`inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 ${!selectedImportEmpresa || isImporting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                   >
                     {isImporting ? 'Processando...' : 'Selecionar Arquivo'}
                   </label>
@@ -417,11 +482,12 @@ const Procedimentos = () => {
                   <h4 className="font-medium mb-2">Formato esperado:</h4>
                   <ul className="list-disc list-inside space-y-1">
                     <li>Nome do Procedimento (obrigatório)</li>
-                    <li>Código (opcional)</li>
                     <li>Valor (obrigatório, em números)</li>
                     <li>Categoria (opcional)</li>
-                    <li>Empresa ID (opcional)</li>
                   </ul>
+                  <p className="mt-2 text-xs">
+                    <strong>Nota:</strong> O código será gerado automaticamente e todos os procedimentos serão associados à empresa selecionada acima.
+                  </p>
                 </div>
                 
                 <div className="flex justify-between pt-4">
@@ -429,7 +495,10 @@ const Procedimentos = () => {
                     <Download className="mr-2 h-4 w-4" />
                     Baixar Modelo
                   </Button>
-                  <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>
+                  <Button variant="outline" onClick={() => {
+                    setIsImportDialogOpen(false);
+                    setSelectedImportEmpresa('');
+                  }}>
                     Fechar
                   </Button>
                 </div>
@@ -471,8 +540,14 @@ const Procedimentos = () => {
                     id="codigo"
                     value={formData.codigo}
                     onChange={(e) => setFormData({ ...formData, codigo: e.target.value })}
-                    placeholder="Ex: CON001"
+                    placeholder={editingProcedimento ? "Ex: PROC0001" : "Será gerado automaticamente se deixado vazio"}
+                    disabled={!editingProcedimento}
                   />
+                  {!editingProcedimento && (
+                    <p className="text-xs text-muted-foreground">
+                      O código será gerado automaticamente no formato PROC0001, PROC0002, etc.
+                    </p>
+                  )}
                 </div>
                 
                 <div className="space-y-2">
